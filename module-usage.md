@@ -32,17 +32,40 @@ my-project
 
 ## main.tf
 
+There are 2 options to create the `main.tf` file:
+
+- Use **Root Module** (simple, recommended)
+- Use **Child Module** (`modules/instances`) (more control)
+
+> [!NOTE]
+>
+> When `map` or `mapping` is mentioned, it means variables defined like:
+>
+> ```hcl
+> incus_instances = {
+>   "c1" = { ip = "10.150.19.50", cpu = 2, memory = "2GiB" },
+>   "c2" = { ip = "10.150.19.51", cpu = 1, memory = "1GiB" }
+> }
+> ```
+
+### A. Use Root Module
+
+- Supports multiple containers
+- Uses `incus_instances` map directly
+- No loop (for_each) needed in this file. (handled by **tofucus** module repository)
+- Simple setup
+
 ```hcl
-# https://opentofu.org/docs/language/modules/sources
-# https://opentofu.org/docs/language/modules/sources/#support-for-variable-and-local-evaluation
+// https://opentofu.org/docs/language/modules/sources
+// https://opentofu.org/docs/language/modules/sources/#support-for-variable-and-local-evaluation
 locals {
   modules_repo = "https://gitea.local/myuser/tofucus.git"
-  # modules_version = "?ref=v1.0.0"
+  modules_version = "?ref=v1.0.0"
 }
 
 module "containers" {
-  # https://opentofu.org/docs/language/modules/sources/#modules-in-package-sub-directories
-  source = "git::${local.modules_repo}//modules/instances"
+  // https://opentofu.org/docs/language/modules/sources/#modules-in-package-sub-directories
+  source = "git::${local.modules_repo}${local.modules_version}"
 
   incus_instances    = var.incus_instances
   incus_image        = var.incus_image
@@ -52,7 +75,87 @@ module "containers" {
   username           = var.username
   timezone           = var.timezone
 }
+
+output "instance_report" {
+  value = module.containers.instance_report
+}
+
+output "reminder" {
+  value = module.containers.reminder
+}
 ```
+
+### B. Use Child Module
+
+This directly uses the **Child Module** inside `modules/*` directory.
+
+- Requires looping (`for_each`) over `incus_instances` in **this** `main.tf` file
+- More flexible
+- Slightly more complex
+
+```hcl
+locals {
+  modules_repo = "https://gitea.local/myuser/tofucus.git"
+  modules_version = "?ref=v1.0.0"
+
+  // for outputs block
+  instance_data = {
+    for name, instance in module.containers :
+    name => instance.container_ip
+  }
+}
+
+module "containers" {
+  source = "git::${local.modules_repo}//modules/instances${local.modules_version}"
+
+  for_each = var.incus_instances
+
+  // variables name from 'modules/instances/variables.tf' file
+  instance_name = each.key
+  ipv4_address  = each.value.ip
+  cpu_limit     = each.value.cpu
+  memory_limit  = each.value.memory
+
+  image         = var.incus_image
+  storage_pool  = var.incus_storage_pool
+  network_name  = var.incus_network
+  nic_type      = var.incus_nic_type
+
+  ssh_key       = var.ssh_public_key
+  username      = var.username
+  timezone      = var.timezone
+}
+
+output "instance_report" {
+  value = [
+    for name, ip in local.instance_data :
+    format("%-15s -> %s", name, ip)
+  ]
+}
+
+output "reminder" {
+  value = "Container is up! Please wait ~30 seconds for the setup script to finish before SSHing."
+}
+```
+
+> [!NOTE]
+>
+> When using the **Child Module**, this `main.tf` structure is the same as the root `main.tf` inside
+> the **tofucus** repository.
+>
+> The only difference:
+>
+> - Replace local source:
+>
+>   ```hcl
+>   source = "./modules/instances"
+>   ```
+>
+> - With remote source:
+>
+>   ```hcl
+>   source = "git::https://gitea.local/myuser/tofucus.git//modules/instances"
+>   ```
 
 ## variables.tf
 
