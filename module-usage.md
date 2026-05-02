@@ -60,7 +60,7 @@ There are 2 options to create the `main.tf` file:
 // https://opentofu.org/docs/language/modules/sources/#support-for-variable-and-local-evaluation
 locals {
   modules_repo = "https://gitea.local/myuser/tofucus.git"
-  modules_version = "?ref=v1.0.0"
+  modules_version = "?ref=v1.0.1"
 }
 
 module "containers" {
@@ -76,8 +76,8 @@ module "containers" {
   timezone           = var.timezone
 }
 
-output "instance_report" {
-  value = module.containers.instance_report
+output "containers" {
+  value = module.containers.containers
 }
 
 output "reminder" {
@@ -96,13 +96,7 @@ This directly uses the **Child Module** inside `modules/*` directory.
 ```hcl
 locals {
   modules_repo = "https://gitea.local/myuser/tofucus.git"
-  modules_version = "?ref=v1.0.0"
-
-  // for outputs block
-  instance_data = {
-    for name, instance in module.containers :
-    name => instance.container_ip
-  }
+  modules_version = "?ref=v1.0.1"
 }
 
 module "containers" {
@@ -126,11 +120,11 @@ module "containers" {
   timezone      = var.timezone
 }
 
-output "instance_report" {
-  value = [
-    for name, ip in local.instance_data :
-    format("%-15s -> %s", name, ip)
-  ]
+output "containers" {
+  value = {
+    for k, v in module.containers :
+    k => v.container
+  }
 }
 
 output "reminder" {
