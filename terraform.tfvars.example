@@ -1,8 +1,31 @@
-# Map of container definitions. Each entry includes IP address, CPU cores (e.g. "2"), and memory size (e.g. "2GiB").
-# 'ip' must be in the same subnet as Incus network. Use 'incus network list' to find the subnet
+# Required container configuration.
+#   ip     - static IPv4 address within incus network subnet (e.g. 10.150.19.50)
+#   cpu    - number of CPU cores allocated to the container (e.g. 2)
+#   memory - memory limit with unit (e.g. "2GiB" or "512MiB")
+# Ensure the IP address is not already used and falls inside the subnet.
+# Use 'incus network list' to find the subnet (look for "inet" address of the bridge).
+#
+# https://linuxcontainers.org/incus/docs/main/faq/#can-i-bind-mount-my-home-directory-in-a-container
+# Optional bind mounts from host to container.
+#   host_path  - existing directory on the host (use absolute path, e.g. /home/user/data)
+#   mount_path - destination path inside the container (e.g. /media)
+#   readonly   - set to true for read‑only access (default false)
+#   shift      - enable idmapped mounts to fix permission issues
 incus_instances = {
-  "c1" = { ip = "10.150.19.50", cpu = 2, memory = "2GiB" },
-  "c2" = { ip = "10.150.19.51", cpu = 1, memory = "1GiB" }
+  "c1" = {
+    ip     = "10.150.19.50"
+    cpu    = 2
+    memory = "2GiB"
+    bind_mounts = [
+      {
+        host_path  = "/home/user/data"
+        mount_path = "/media"
+        readonly   = false
+        shift      = true
+      }
+    ]
+  }
+  # "c2" = { ip = "10.150.19.51", cpu = 1, memory = "1GiB" }
 }
 
 # The OS image to use for all containers. Must be a 'cloud' image (e.g. 'debian/12/cloud').

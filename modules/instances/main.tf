@@ -35,4 +35,21 @@ resource "incus_instance" "vm" {
       "ipv4.address" = var.ipv4_address
     }
   }
+
+  // https://linuxcontainers.org/incus/docs/main/reference/devices_disk/#type-disk
+  dynamic "device" {
+    for_each = var.bind_mounts
+    content {
+      name = "bind-${substr(md5(device.value.host_path), 0, 8)}"
+      type = "disk"
+      properties = {
+        source   = device.value.host_path
+        path     = device.value.mount_path
+        // use ternary to set boolean value into ("string")
+        // condition ? true_value : false_value
+        readonly = device.value.readonly ? "true" : "false"
+        shift    = device.value.shift ? "true" : "false"
+      }
+    }
+  }
 }

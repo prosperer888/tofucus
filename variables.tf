@@ -1,18 +1,36 @@
-# variable "incus_remote" {
-#   type        = string
-#   default     = "local"
-#   description = "The incus remote to use. 'local' for the local Unix socket, or the name of a remote configured via 'incus remote add'."
-# }
+// variable "incus_remote" {
+//   type        = string
+//   default     = "local"
+//   description = "The incus remote to use. 'local' for the local Unix socket, or the name of a remote configured via 'incus remote add'."
+// }
 
 variable "incus_instances" {
   type = map(object({
     ip     = string
     cpu    = number
     memory = string
+    bind_mounts  = optional(list(object({
+      host_path  = string
+      mount_path = string
+      readonly   = optional(bool, false)
+      shift      = optional(bool, false) # https://linuxcontainers.org/incus/docs/main/faq/#can-i-bind-mount-my-home-directory-in-a-container
+    })), [])
   }))
   description = "Map of container names to their configuration. Each entry requires a static IPv4 address (e.g. '10.150.19.50'), CPU cores as number (e.g. 2), and memory limit (e.g. '2GiB')."
 
-  # CPU validation
+  // host path validation
+  validation {
+    condition = alltrue([
+      for inst in var.incus_instances :
+      alltrue([
+        for d in inst.bind_mounts :
+        can(regex("^/", d.host_path))
+      ])
+    ])
+    error_message = "host_path must be an absolute path (start with /)"
+  }
+
+  // CPU validation
   validation {
     condition = alltrue([
       for inst in var.incus_instances :
@@ -21,7 +39,7 @@ variable "incus_instances" {
     error_message = "CPU must be greater than 0."
   }
 
-  # Memory validation
+  // Memory validation
   validation {
     condition = alltrue([
       for inst in var.incus_instances :
@@ -30,7 +48,7 @@ variable "incus_instances" {
     error_message = "Memory must be like 512MiB or 2GiB."
   }
 
-  # IP validation
+  // IP validation
   validation {
     condition = alltrue([
       for inst in var.incus_instances :
@@ -39,7 +57,7 @@ variable "incus_instances" {
     error_message = "IP must be a valid IPv4 address."
   }
 
-  # Duplicate ip validation
+  // Duplicate ip validation
   validation {
     condition = length(distinct([
       for inst in var.incus_instances : inst.ip

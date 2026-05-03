@@ -8,6 +8,9 @@ module "incus_instances" {
   ipv4_address  = each.value.ip
   cpu_limit     = each.value.cpu
   memory_limit  = each.value.memory
+  // bind mount host directory inside container
+  // https://linuxcontainers.org/incus/docs/main/faq/#can-i-bind-mount-my-home-directory-in-a-container
+  bind_mounts   = each.value.bind_mounts
 
   username      = var.username
   ssh_key       = var.ssh_public_key
@@ -18,4 +21,3 @@ module "incus_instances" {
   network_name  = var.incus_network
   nic_type      = var.incus_nic_type
 }
-
