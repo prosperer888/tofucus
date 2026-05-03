@@ -1,7 +1,6 @@
 #cloud-config
 users:
   - name: ${username}
-    groups: sudo, wheel
     shell: /bin/bash
     sudo: 'ALL=(ALL) NOPASSWD:ALL'
     ssh_authorized_keys:
@@ -31,18 +30,21 @@ write_files:
       # install python for bootstrap with ansible
       case "$DISTRO" in
         ubuntu|debian)
+          usermod -aG sudo ${username}
           apt-get update
           apt-get -y install curl git openssh-server python3
           systemctl enable --now ssh
           # systemctl start ssh
           ;;
         fedora|almalinux|rocky)
+          usermod -aG wheel ${username}
           dnf -y install curl git openssh-server python3
           systemctl enable --now sshd
           # systemctl start sshd
           ;;
         arch)
-          pacman -S --noconfirm curl git openssh python
+          usermod -aG wheel ${username}
+          pacman -Sy --noconfirm curl git openssh python
           systemctl enable --now sshd
           # systemctl start sshd
           ;;
