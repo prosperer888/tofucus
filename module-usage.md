@@ -1,9 +1,39 @@
-# Module Usage Guide
+# OpenTofu Module Usage Guide
 
 This repository is a reusable **OpenTofu** module that deploys **Incus** containers with static IPs,
 resource limits, and cloud‑init provisioning.
 
 This guide explains how to use this module in other projects.
+
+> [!WARNING]
+>
+> Only works with incus images that include cloud-init (usually images with `/cloud` in the name).
+> This module supports **containers only** (not Incus virtual machines).
+
+## Table Of Contents
+
+<details>
+  <summary>Click to expand</summary>
+
+<!-- toc -->
+
+- [Basic Idea](#basic-idea)
+- [Example Project Structure](#example-project-structure)
+- [Requirements](#requirements)
+- [main.tf](#maintf)
+  - [A. Use Root Module](#a-use-root-module)
+  - [B. Use Child Module](#b-use-child-module)
+- [variables.tf](#variablestf)
+- [terraform.tfvars](#terraformtfvars)
+- [versions.tf](#versionstf)
+- [.gitignore](#gitignore)
+- [Usage](#usage)
+- [Destroy Resources](#destroy-resources)
+- [Notes](#notes)
+
+<!-- tocstop -->
+
+</details>
 
 ## Basic Idea
 
@@ -42,9 +72,28 @@ There are 2 options to create the `main.tf` file:
 > When `map` or `mapping` is mentioned, it means variables defined like:
 >
 > ```hcl
+> # Required container configuration. Each entry must include:
+> #   ip     - static IPv4 address within your Incus network subnet
+> #   cpu    - number of CPU cores allocated to the container
+> #   memory - memory limit with unit (MiB or GiB)
+> #   bind_mounts - (optional) list of host directories to bind mount into the container
 > incus_instances = {
->   "c1" = { ip = "10.150.19.50", cpu = 2, memory = "2GiB" },
->   "c2" = { ip = "10.150.19.51", cpu = 1, memory = "1GiB" }
+>   "media" = {
+>     ip     = "10.150.19.50"
+>     cpu    = 2
+>     memory = "2GiB"
+>
+>     # optional
+>     bind_mounts = [
+>       {
+>         host_path  = "/mnt/media"
+>         mount_path = "/media"
+>         readonly   = false
+>         shift      = true
+>       }
+>     ]
+>   }
+>   "db"   = { ip = "10.150.19.51", cpu = 1, memory = "1GiB" }
 > }
 > ```
 
@@ -59,8 +108,8 @@ There are 2 options to create the `main.tf` file:
 // https://opentofu.org/docs/language/modules/sources
 // https://opentofu.org/docs/language/modules/sources/#support-for-variable-and-local-evaluation
 locals {
-  modules_repo = "https://gitea.local/myuser/tofucus.git"
-  modules_version = "?ref=v1.0.1"
+  modules_repo = "https://github.com/prosperer888/tofucus.git"
+  modules_version = "?ref=v1.1.0"
 }
 
 module "containers" {
@@ -95,8 +144,8 @@ This directly uses the **Child Module** inside `modules/*` directory.
 
 ```hcl
 locals {
-  modules_repo = "https://gitea.local/myuser/tofucus.git"
-  modules_version = "?ref=v1.0.1"
+  modules_repo = "https://github.com/prosperer888/tofucus.git"
+  modules_version = "?ref=v1.1.0"
 }
 
 module "containers" {
@@ -109,6 +158,7 @@ module "containers" {
   ipv4_address  = each.value.ip
   cpu_limit     = each.value.cpu
   memory_limit  = each.value.memory
+  bind_mounts   = each.value.bind_mounts
 
   image         = var.incus_image
   storage_pool  = var.incus_storage_pool
@@ -162,6 +212,13 @@ variable "incus_instances" {
     ip     = string
     cpu    = number
     memory = string
+    bind_mounts  = optional(list(object({
+      host_path  = string
+      mount_path = string
+      readonly   = optional(bool, false)
+      # https://linuxcontainers.org/incus/docs/main/faq/#can-i-bind-mount-my-home-directory-in-a-container
+      shift      = optional(bool, false)
+    })), [])
   }))
 }
 
@@ -198,12 +255,50 @@ variable "timezone" {
 
 ## terraform.tfvars
 
+> [!NOTE]
+>
+> Check Incus network subnet:
+>
+> ```shell
+> incus network list
+> ```
+>
+> Example: `incusbr0` are using `10.150.19.1/24`
+>
+> This means usable IPs are: `10.150.19.2 – 10.150.19.254`
+>
+> Use only IPs within this range in `incus_instances`.
+
 **Do NOT** commit this file to git. It may contain sensitive data.
 
 ```hcl
-# make sure no others incus containers using same IP address
+# Required container configuration.
+#   ip     - static IPv4 address within incus network subnet (e.g. 10.150.19.50)
+#   cpu    - number of CPU cores allocated to the container (e.g. 2)
+#   memory - memory limit with unit (e.g. "2GiB" or "512MiB")
+# Ensure the IP address is not already used and falls inside the subnet.
+# Use 'incus network list' to find the subnet (look for "inet" address of the bridge).
+#
+# https://linuxcontainers.org/incus/docs/main/faq/#can-i-bind-mount-my-home-directory-in-a-container
+# Optional bind mounts from host to container.
+#   host_path  - existing directory on the host (use absolute path, e.g. /home/user/data)
+#   mount_path - destination path inside the container (e.g. /media)
+#   readonly   - set to true for read‑only access (default false)
+#   shift      - enable idmapped mounts to fix permission issues
 incus_instances = {
-  "c1" = { ip = "10.150.19.50", cpu = 2, memory = "2GiB" },
+  "c1" = {
+    ip     = "10.150.19.50"
+    cpu    = 2
+    memory = "2GiB"
+    bind_mounts = [
+      {
+        host_path  = "/home/user/data"
+        mount_path = "/media"
+        readonly   = false
+        shift      = true
+      }
+    ]
+  }
   "c2" = { ip = "10.150.19.51", cpu = 1, memory = "1GiB" }
 }
 # this OpenTofu module only accept images that end with '/cloud'
@@ -246,11 +341,13 @@ terraform.tfvars
 
 Run the following commands:
 
-```sh
+```shell
 cd infra
 tofu init
 tofu plan
-tofu apply
+
+tofu apply -var="ssh_public_key=$(cat ~/.ssh/id_ed25519.pub)"
+
 # (optional) run provisioning scripts (e.g. Ansible)
 
 # back to 'my-project' directory
@@ -260,9 +357,24 @@ cd ../my-project
 # web server, DB cluster ETC
 ```
 
+> [!NOTE]
+>
+> We can pass different environment `*.tfvars` file like below:
+>
+> ```shell
+> tofu apply -var-file="dev.tfvars"
+> ```
+>
+> OpenTofu/Terraform loads variables in below order:
+>
+> 1. `terraform.tfvars` (auto)
+> 2. `*.auto.tfvars`
+> 3. `-var-file=*.tfvars` (manual override, highest priority)
+> 4. `-var=*` (cli override, highest priority of all)
+
 ## Destroy Resources
 
-```sh
+```shell
 cd infra
 tofu destroy
 ```
