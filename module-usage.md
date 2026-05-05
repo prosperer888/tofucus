@@ -109,7 +109,7 @@ There are 2 options to create the `main.tf` file:
 // https://opentofu.org/docs/language/modules/sources/#support-for-variable-and-local-evaluation
 locals {
   modules_repo = "https://github.com/prosperer888/tofucus.git"
-  modules_version = "?ref=v1.1.0"
+  modules_version = "?ref=v1.1.1"
 }
 
 module "containers" {
@@ -145,7 +145,7 @@ This directly uses the **Child Module** inside `modules/*` directory.
 ```hcl
 locals {
   modules_repo = "https://github.com/prosperer888/tofucus.git"
-  modules_version = "?ref=v1.1.0"
+  modules_version = "?ref=v1.1.1"
 }
 
 module "containers" {

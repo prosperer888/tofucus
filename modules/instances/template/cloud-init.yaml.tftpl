@@ -1,10 +1,13 @@
 #cloud-config
 users:
+  - default
   - name: ${username}
+    passwd: '*'
     shell: /bin/bash
     sudo: 'ALL=(ALL) NOPASSWD:ALL'
     ssh_authorized_keys:
       - ${ssh_key}
+    lock_passwd: false
 
 package_update: true
 timezone: ${timezone}
