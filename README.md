@@ -140,6 +140,7 @@ incus_instances = {
     memory = string
 
     # optional
+    nesting     = bool
     bind_mounts = [
       {
         host_path  = string
@@ -160,6 +161,35 @@ Required container configuration for `incus_instances`.
 
 Make sure the IP address is not already in used and use same subnet. Use `incus network list` to
 find the subnet (look for **"inet"** address of the bridge).
+
+**Optional** variable
+
+- `nesting` - enable nested virtualization inside container (e.g. "true". Default are "false")
+
+> [!NOTE]
+>
+> **If we want to run docker container inside incus container,** we need to enable/set
+> `nesting = true`, we must also configure docker to use the `fuse-overlayfs` storage driver. Inside
+> the container, create `/etc/docker/daemon.json` after installing docker:
+>
+> ```shell
+> # fuse-overlayfs will be install when set 'nesting = true'
+>
+> vi /etc/docker/daemon.json
+> ```
+>
+> Insert below json content inside `daemon.json` file
+>
+> ```json
+> {
+>   "storage-driver": "fuse-overlayfs"
+> }
+> ```
+>
+> Then restart Docker: `systemctl restart docker`. This avoids the `invalid argument` error with
+> overlayfs on an already‑nested filesystem.
+
+**Bind Mount** host directory into containers
 
 <https://linuxcontainers.org/incus/docs/main/faq/#can-i-bind-mount-my-home-directory-in-a-container>
 
@@ -199,12 +229,14 @@ Optionally mount host directories into containers (bind mounts)
 #   ip     - static IPv4 address within your Incus network subnet
 #   cpu    - number of CPU cores allocated to the container
 #   memory - memory limit with unit (MiB or GiB)
+#   nesting - set to true if want to use nested virtualization inside containers
 #   bind_mounts - (optional) list of host directories to bind mount into the container
 incus_instances = {
   "media" = {
     ip     = "10.150.19.50"
     cpu    = 2
     memory = "2GiB"
+    nesting = true
 
     # optional
     bind_mounts = [
@@ -311,6 +343,7 @@ incus_instances = {
     ip     = "10.150.19.50"
     cpu    = 2
     memory = "2GiB"
+    nesting = true
     bind_mounts = [
       {
         host_path  = "/mnt/media"
@@ -324,6 +357,7 @@ incus_instances = {
     ip     = "10.150.19.51"
     cpu    = 1
     memory = "1GiB"
+    nesting = true
     bind_mounts = [
       {
         host_path  = "/mnt/media"
@@ -447,9 +481,13 @@ ssh incus@10.150.19.50
 - [x] CPU and memory limits
 - [x] Outputs
 - [ ] Use incus profile/project in `modules/instances/main.tf`
-- [x] bind mounts (host directories)
+- [x] Bind mounts (host directories)
 - [ ] Managed storage volumes (zfs/btrfs/dir)
 - [ ] Multiple networks
+- [x] Support nested virtualization
+- [ ] Support for adding configs options from
+      [Instance options](https://linuxcontainers.org/incus/docs/main/reference/instance_options/)
+- [ ] Support for adding extra storage pool
 
 <!-- LICENSE -->
 
