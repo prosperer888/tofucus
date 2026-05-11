@@ -52,6 +52,21 @@ write_files:
           # systemctl start sshd
           ;;
       esac
+
+      # install 'fuse-overlayfs' for virtualization storage.
+      # E.G. For docker, '"storage-driver": "fuse-overlayfs"' inside '/etc/docker/daemon.json'
+      if [ "${nesting}" = "true" ]; then
+        if command -v apt-get >/dev/null; then
+          apt-get update
+          apt-get install -y fuse-overlayfs
+
+        elif command -v dnf >/dev/null; then
+          dnf install -y fuse-overlayfs
+
+        elif command -v pacman >/dev/null; then
+          pacman -Sy --noconfirm fuse-overlayfs
+        fi
+      fi
       echo "Setup complete for $DISTRO at $(date '+%a %b %-d %r %Z %Y')" > /var/log/lab-setup.log
 
 runcmd:

@@ -8,6 +8,8 @@ module "incus_instances" {
   ipv4_address  = each.value.ip
   cpu_limit     = each.value.cpu
   memory_limit  = each.value.memory
+  // variable for enable nested virtualization inside incus containers
+  nesting       = each.value.nesting
   // bind mount host directory inside container
   // https://linuxcontainers.org/incus/docs/main/faq/#can-i-bind-mount-my-home-directory-in-a-container
   bind_mounts   = each.value.bind_mounts

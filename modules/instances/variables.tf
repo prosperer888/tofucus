@@ -21,3 +21,8 @@ variable "bind_mounts" {
   }))
   default = []
 }
+variable "nesting" {
+  description = "Enable nesting to run nested virtualization inside container."
+  type        = bool
+  default     = false
+}

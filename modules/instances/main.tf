@@ -1,10 +1,19 @@
+# variables for enable nested virtualization inside incus containers
+locals {
+  nesting_config = var.nesting ? {
+    "security.nesting"                     = "true"
+    "security.syscalls.intercept.mknod"    = "true"
+    "security.syscalls.intercept.setxattr" = "true"
+  } : {}
+}
+
 resource "incus_instance" "vm" {
   name      = var.instance_name
   image     = "images:${var.image}"
   type      = "container"
   running   = true
 
-  config = {
+  config = merge({
     "boot.autostart" = "true"
     "limits.cpu"     = tostring(var.cpu_limit)
     "limits.memory"  = tostring(var.memory_limit)
@@ -13,8 +22,9 @@ resource "incus_instance" "vm" {
       username = var.username
       ssh_key  = var.ssh_key
       timezone = var.timezone
+      nesting  = var.nesting
     })
-  }
+  }, local.nesting_config)
 
   device {
     name = "root"

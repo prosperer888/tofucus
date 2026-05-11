@@ -6,9 +6,10 @@
 
 variable "incus_instances" {
   type = map(object({
-    ip     = string
-    cpu    = number
-    memory = string
+    ip      = string
+    cpu     = number
+    memory  = string
+    nesting = optional(bool, false)
     bind_mounts  = optional(list(object({
       host_path  = string
       mount_path = string

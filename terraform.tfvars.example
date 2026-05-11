@@ -1,7 +1,8 @@
 # Required container configuration.
-#   ip     - static IPv4 address within incus network subnet (e.g. 10.150.19.50)
-#   cpu    - number of CPU cores allocated to the container (e.g. 2)
-#   memory - memory limit with unit (e.g. "2GiB" or "512MiB")
+#   ip      - static IPv4 address within incus network subnet (e.g. 10.150.19.50)
+#   cpu     - number of CPU cores allocated to the container (e.g. 2)
+#   memory  - memory limit with unit (e.g. "2GiB" or "512MiB")
+#   nesting - optionally enable nesting to run nested virtualization inside container (default "false")
 # Ensure the IP address is not already used and falls inside the subnet.
 # Use 'incus network list' to find the subnet (look for "inet" address of the bridge).
 #
@@ -13,9 +14,10 @@
 #   shift      - enable idmapped mounts to fix permission issues
 incus_instances = {
   "c1" = {
-    ip     = "10.150.19.50"
-    cpu    = 2
-    memory = "2GiB"
+    ip      = "10.150.19.50"
+    cpu     = 2
+    memory  = "2GiB"
+    nesting = false
     bind_mounts = [
       {
         host_path  = "/home/user/data"

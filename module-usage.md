@@ -72,16 +72,12 @@ There are 2 options to create the `main.tf` file:
 > When `map` or `mapping` is mentioned, it means variables defined like:
 >
 > ```hcl
-> # Required container configuration. Each entry must include:
-> #   ip     - static IPv4 address within your Incus network subnet
-> #   cpu    - number of CPU cores allocated to the container
-> #   memory - memory limit with unit (MiB or GiB)
-> #   bind_mounts - (optional) list of host directories to bind mount into the container
 > incus_instances = {
->   "media" = {
->     ip     = "10.150.19.50"
->     cpu    = 2
->     memory = "2GiB"
+>   "media"   = {
+>     ip      = "10.150.19.50"
+>     cpu     = 2
+>     memory  = "2GiB"
+>     nesting = true
 >
 >     # optional
 >     bind_mounts = [
@@ -109,7 +105,7 @@ There are 2 options to create the `main.tf` file:
 // https://opentofu.org/docs/language/modules/sources/#support-for-variable-and-local-evaluation
 locals {
   modules_repo = "https://github.com/prosperer888/tofucus.git"
-  modules_version = "?ref=v1.1.1"
+  modules_version = "?ref=v1.2.0"
 }
 
 module "containers" {
@@ -145,7 +141,7 @@ This directly uses the **Child Module** inside `modules/*` directory.
 ```hcl
 locals {
   modules_repo = "https://github.com/prosperer888/tofucus.git"
-  modules_version = "?ref=v1.1.1"
+  modules_version = "?ref=v1.2.0"
 }
 
 module "containers" {
@@ -159,6 +155,7 @@ module "containers" {
   cpu_limit     = each.value.cpu
   memory_limit  = each.value.memory
   bind_mounts   = each.value.bind_mounts
+  nesting       = each.value.nesting
 
   image         = var.incus_image
   storage_pool  = var.incus_storage_pool
@@ -209,9 +206,10 @@ example below, `incus_nic_type` is omit from variables.tf file.
 ```hcl
 variable "incus_instances" {
   type = map(object({
-    ip     = string
-    cpu    = number
-    memory = string
+    ip      = string
+    cpu     = number
+    memory  = string
+    nesting = optional(bool, false)
     bind_mounts  = optional(list(object({
       host_path  = string
       mount_path = string
@@ -273,9 +271,11 @@ variable "timezone" {
 
 ```hcl
 # Required container configuration.
-#   ip     - static IPv4 address within incus network subnet (e.g. 10.150.19.50)
-#   cpu    - number of CPU cores allocated to the container (e.g. 2)
-#   memory - memory limit with unit (e.g. "2GiB" or "512MiB")
+#   ip      - static IPv4 address within incus network subnet (e.g. 10.150.19.50)
+#   cpu     - number of CPU cores allocated to the container (e.g. 2)
+#   memory  - memory limit with unit (e.g. "2GiB" or "512MiB")
+#   nesting - set to true if want to use nested virtualization inside containers
+#
 # Ensure the IP address is not already used and falls inside the subnet.
 # Use 'incus network list' to find the subnet (look for "inet" address of the bridge).
 #
@@ -290,6 +290,7 @@ incus_instances = {
     ip     = "10.150.19.50"
     cpu    = 2
     memory = "2GiB"
+    nesting = true
     bind_mounts = [
       {
         host_path  = "/home/user/data"
