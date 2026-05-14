@@ -55,7 +55,9 @@ This opentofu configuration will:
 - Create multiple containers using a simple map variable
 - Assign **static IPv4 addresses** on a bridged network (`incusbr0`)
 - Set **CPU and memory** limits per container
-- **bind mounts (host directories)** into containers
+- **Optionally Bind mounts (host directories)** into containers
+- **Optionally add extra configs.**
+  [Instance Options](https://linuxcontainers.org/incus/docs/main/reference/instance_options)
 - Automatically:
   - Create a non‑root user with passwordless sudo
   - Adds SSH key
@@ -149,6 +151,8 @@ incus_instances = {
         shift      = bool
       }
     ]
+    extra_config   = map(string)
+    # extra_config   = { "key" = "value" }   # optional
   }
 }
 ```
@@ -164,16 +168,21 @@ find the subnet (look for **"inet"** address of the bridge).
 
 **Optional** variable
 
-- `nesting` - enable nested virtualization inside container (e.g. "true". Default are "false")
+- `extra_config` - Optionally add extra configurations from
+  [instance options](https://linuxcontainers.org/incus/docs/main/reference/instance_options).
+  (Default `{}`)
+- `nesting` - Optionally enable nested virtualization inside container (e.g. "true". Default are
+  "false")
 
 > [!NOTE]
 >
 > **If we want to run docker container inside incus container,** we need to enable/set
-> `nesting = true`, we must also configure docker to use the `fuse-overlayfs` storage driver. Inside
-> the container, create `/etc/docker/daemon.json` after installing docker:
+> `nesting = true`, we must also configure docker to use the `fuse-overlayfs` storage driver (**not
+> yet** try with `btrfs` or `zfs`). Inside the container, create `/etc/docker/daemon.json` after
+> installing docker:
 >
 > ```shell
-> # fuse-overlayfs will be install when set 'nesting = true'
+> # fuse-overlayfs will be install when set 'nesting = true' (cloud-init)
 >
 > vi /etc/docker/daemon.json
 > ```
@@ -187,7 +196,8 @@ find the subnet (look for **"inet"** address of the bridge).
 > ```
 >
 > Then restart Docker: `systemctl restart docker`. This avoids the `invalid argument` error with
-> overlayfs on an already‑nested filesystem.
+> overlayfs on an already‑nested filesystem. E.G. when run `docker compose up -d` error will occur
+> when use default docker `storage-driver`
 
 **Bind Mount** host directory into containers
 
@@ -229,8 +239,9 @@ Optionally mount host directories into containers (bind mounts)
 #   ip     - static IPv4 address within your Incus network subnet
 #   cpu    - number of CPU cores allocated to the container
 #   memory - memory limit with unit (MiB or GiB)
-#   nesting - set to true if want to use nested virtualization inside containers
+#   nesting - (optional) set to true if want to use nested virtualization inside containers
 #   bind_mounts - (optional) list of host directories to bind mount into the container
+#   extra_config - (optional) add extra config to incus containers
 incus_instances = {
   "media" = {
     ip     = "10.150.19.50"
@@ -248,7 +259,15 @@ incus_instances = {
       }
     ]
   }
-  "db"   = { ip = "10.150.19.51", cpu = 1, memory = "1GiB" }
+
+  "db" = {
+    ip           = "10.150.19.51"
+    cpu          = 1
+    memory       = "1GiB"
+    extra_config = {
+      "boot.autostart.priority" = "100"
+    }
+  }
 }
 
 incus_image          = "debian/12/cloud"
@@ -351,6 +370,9 @@ incus_instances = {
         shift      = true
       }
     ]
+    extra_config = {
+      "boot.autostart.priority" = "100"
+    }
   }
 
   "sonarr" = {
@@ -431,6 +453,13 @@ ssh incus@10.150.19.50
   - Maps host directories into the container filesystem
   - Useful for sharing media, repositories, or configs
 
+- **Optionally** add extra configurations from
+  [instance options](https://linuxcontainers.org/incus/docs/main/reference/instance_options)
+  - Useful when default configs use by this module is not enough
+
+- **Optionally** enable nesting capabilities for incus containers.
+  - Useful when we want to use docker or another incus inside container
+
 - Cloud‑init on the container:
   - Creates the user and adds the SSH key.
   - Writes a helper script (/usr/local/bin/setup-lab.sh) that detects the distribution and installs
@@ -485,7 +514,7 @@ ssh incus@10.150.19.50
 - [ ] Managed storage volumes (zfs/btrfs/dir)
 - [ ] Multiple networks
 - [x] Support nested virtualization
-- [ ] Support for adding configs options from
+- [x] Support for adding extra configs options from
       [Instance options](https://linuxcontainers.org/incus/docs/main/reference/instance_options/)
 - [ ] Support for adding extra storage pool
 

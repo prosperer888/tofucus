@@ -1,10 +1,27 @@
-# variables for enable nested virtualization inside incus containers
 locals {
+  # variables for enable nested virtualization inside incus containers
   nesting_config = var.nesting ? {
     "security.nesting"                     = "true"
     "security.syscalls.intercept.mknod"    = "true"
     "security.syscalls.intercept.setxattr" = "true"
   } : {}
+
+  // base/default configuration
+  base_config = {
+    "boot.autostart" = "true"
+    "limits.cpu"     = tostring(var.cpu_limit)
+    "limits.memory"  = tostring(var.memory_limit)
+    // cloud-init
+    "cloud-init.user-data" = templatefile("${path.module}/template/cloud-init.yaml.tftpl", {
+      // below are variables that can be pass to cloud-init template file
+      username = var.username
+      ssh_key  = var.ssh_key
+      timezone = var.timezone
+      // if 'var.nesting' is 'true', the cloud-init will install 'fuse-overlayfs'
+      // useful for docker inside incus. (not yet try if using btrfs or zfs require it or not)
+      nesting  = var.nesting
+    })
+  }
 }
 
 resource "incus_instance" "vm" {
@@ -13,18 +30,12 @@ resource "incus_instance" "vm" {
   type      = "container"
   running   = true
 
-  config = merge({
-    "boot.autostart" = "true"
-    "limits.cpu"     = tostring(var.cpu_limit)
-    "limits.memory"  = tostring(var.memory_limit)
-    // cloud-init
-    "cloud-init.user-data" = templatefile("${path.module}/template/cloud-init.yaml.tftpl", {
-      username = var.username
-      ssh_key  = var.ssh_key
-      timezone = var.timezone
-      nesting  = var.nesting
-    })
-  }, local.nesting_config)
+  // merge configs (order)
+  config = merge(
+    local.base_config,
+    local.nesting_config,
+    var.extra_config
+  )
 
   device {
     name = "root"

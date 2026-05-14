@@ -16,6 +16,7 @@ variable "incus_instances" {
       readonly   = optional(bool, false)
       shift      = optional(bool, false) # https://linuxcontainers.org/incus/docs/main/faq/#can-i-bind-mount-my-home-directory-in-a-container
     })), [])
+    extra_config = optional(map(string), {})
   }))
   description = "Map of container names to their configuration. Each entry requires a static IPv4 address (e.g. '10.150.19.50'), CPU cores as number (e.g. 2), and memory limit (e.g. '2GiB')."
 

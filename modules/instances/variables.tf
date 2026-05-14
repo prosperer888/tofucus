@@ -21,8 +21,15 @@ variable "bind_mounts" {
   }))
   default = []
 }
+
 variable "nesting" {
   description = "Enable nesting to run nested virtualization inside container."
   type        = bool
   default     = false
+}
+
+variable "extra_config" {
+  description = "Extra incus configuration key/value pairs to merge into the main container's config."
+  type        = map(string)
+  default     = {}
 }
