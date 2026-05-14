@@ -108,7 +108,7 @@ There are 2 options to create the `main.tf` file:
 // https://opentofu.org/docs/language/modules/sources/#support-for-variable-and-local-evaluation
 locals {
   modules_repo = "https://github.com/prosperer888/tofucus.git"
-  modules_version = "?ref=v1.3.0"
+  modules_version = "?ref=v1.3.1"
 
   // project metadata variable
   // check with command below:
@@ -157,7 +157,7 @@ This directly uses the **Child Module** inside `modules/*` directory.
 ```hcl
 locals {
   modules_repo = "https://github.com/prosperer888/tofucus.git"
-  modules_version = "?ref=v1.3.0"
+  modules_version = "?ref=v1.3.1"
 
   // project metadata variable
   // check with command below:
