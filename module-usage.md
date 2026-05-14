@@ -78,6 +78,9 @@ There are 2 options to create the `main.tf` file:
 >     cpu     = 2
 >     memory  = "2GiB"
 >     nesting = true
+>     extra_config = {
+>       "boot.autostart.priority" = "100"
+>     }
 >
 >     # optional
 >     bind_mounts = [
@@ -105,7 +108,20 @@ There are 2 options to create the `main.tf` file:
 // https://opentofu.org/docs/language/modules/sources/#support-for-variable-and-local-evaluation
 locals {
   modules_repo = "https://github.com/prosperer888/tofucus.git"
-  modules_version = "?ref=v1.2.0"
+  modules_version = "?ref=v1.3.0"
+
+  // project metadata variable
+  // check with command below:
+  // incus config show <container name> | grep "user\."
+  project_metadata = {
+    "user.project_name" = basename(abspath(path.cwd))
+    "user.project_path" = abspath(path.cwd)
+    "user.managed_by"   = "opentofu"
+    // 'timestamp' will always change when run 'tofu apply'
+    // run command below instead, to check container creation date
+    // incus exec <container name> -- cat /var/log/lab-setup.log
+    // "user.created_at"   = timestamp()
+  }
 }
 
 module "containers" {
@@ -141,7 +157,20 @@ This directly uses the **Child Module** inside `modules/*` directory.
 ```hcl
 locals {
   modules_repo = "https://github.com/prosperer888/tofucus.git"
-  modules_version = "?ref=v1.2.0"
+  modules_version = "?ref=v1.3.0"
+
+  // project metadata variable
+  // check with command below:
+  // incus config show <container name> | grep "user\."
+  project_metadata = {
+    "user.project_name" = basename(abspath(path.cwd))
+    "user.project_path" = abspath(path.cwd)
+    "user.managed_by"   = "opentofu"
+    // 'timestamp' will always change when run 'tofu apply'
+    // run command below instead, to check container creation date
+    // incus exec <container name> -- cat /var/log/lab-setup.log
+    // "user.created_at"   = timestamp()
+  }
 }
 
 module "containers" {
@@ -156,6 +185,7 @@ module "containers" {
   memory_limit  = each.value.memory
   bind_mounts   = each.value.bind_mounts
   nesting       = each.value.nesting
+  extra_config  = merge(local.project_metadata, each.value.extra_config)
 
   image         = var.incus_image
   storage_pool  = var.incus_storage_pool
@@ -210,6 +240,7 @@ variable "incus_instances" {
     cpu     = number
     memory  = string
     nesting = optional(bool, false)
+    extra_config = optional(map(string), {})
     bind_mounts  = optional(list(object({
       host_path  = string
       mount_path = string
@@ -274,10 +305,13 @@ variable "timezone" {
 #   ip      - static IPv4 address within incus network subnet (e.g. 10.150.19.50)
 #   cpu     - number of CPU cores allocated to the container (e.g. 2)
 #   memory  - memory limit with unit (e.g. "2GiB" or "512MiB")
-#   nesting - set to true if want to use nested virtualization inside containers
 #
 # Ensure the IP address is not already used and falls inside the subnet.
 # Use 'incus network list' to find the subnet (look for "inet" address of the bridge).
+#
+# Optional
+#   nesting - set to true if want to use nested virtualization inside containers
+#   extra_config - optionally add extra configurations
 #
 # https://linuxcontainers.org/incus/docs/main/faq/#can-i-bind-mount-my-home-directory-in-a-container
 # Optional bind mounts from host to container.
@@ -300,7 +334,14 @@ incus_instances = {
       }
     ]
   }
-  "c2" = { ip = "10.150.19.51", cpu = 1, memory = "1GiB" }
+  "c2" = {
+    ip           = "10.150.19.51"
+    cpu          = 1
+    memory       = "1GiB"
+    extra_config = {
+      "boot.autostart.priority" = "100"
+    }
+  }
 }
 # this OpenTofu module only accept images that end with '/cloud'
 incus_image        = "debian/12/cloud"
@@ -344,7 +385,7 @@ Run the following commands:
 
 ```shell
 cd infra
-tofu init
+tofu init   # or tofu init -upgrade
 tofu plan
 
 tofu apply -var="ssh_public_key=$(cat ~/.ssh/id_ed25519.pub)"
