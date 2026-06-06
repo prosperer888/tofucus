@@ -10,7 +10,7 @@
 # Optional bind mounts from host to container.
 #   host_path  - existing directory on the host (use absolute path, e.g. /home/user/data)
 #   mount_path - destination path inside the container (e.g. /media)
-#   readonly   - set to true for read‑only access (default false)
+#   readonly   - set to true for read only access (default false)
 #   shift      - enable idmapped mounts to fix permission issues
 #
 # https://linuxcontainers.org/incus/docs/main/reference/instance_options
