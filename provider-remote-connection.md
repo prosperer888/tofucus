@@ -6,9 +6,7 @@ By default, opentofu connects to the local incus daemon through the Unix socket:
 
 ```hcl
 provider "incus" {
-  generate_client_certificates = false
-  accept_remote_certificate    = false
-  default_remote               = "local"
+  default_remote = "local"
 
   remote {
     name    = "local"
@@ -29,7 +27,7 @@ remote HTTPS endpoint instead.
 > For a remote incus server, there is no need to install incus on the control machine. The opentofu
 > provider communicates directly with the remote incus API.
 
-## 1. Enable the Incus API
+## 1. Enable The Incus API
 
 > [!NOTE]
 >
@@ -57,7 +55,36 @@ Reference:
 
 - [incus config set](https://linuxcontainers.org/incus/docs/main/reference/manpages/incus/config/set)
 
-## 2. Generate a Trust Token
+### Open The Firewall On The Incus Server
+
+We need to allow incoming TCP traffic on port `8443` on incus server/host.
+
+**If using `ufw` (Ubuntu/Debian default):**
+
+```bash
+sudo ufw allow 8443/tcp
+sudo ufw reload
+```
+
+**If using `firewalld` (Fedora/RHEL):**
+
+```bash
+sudo firewall-cmd --permanent --add-port=8443/tcp
+sudo firewall-cmd --reload
+```
+
+### Verify That The Port Is Reachable
+
+After opening the firewall, test from the client machine (where OpenTofu runs and Incus is not
+installed):
+
+```shell
+nc -vz <incus-server-ip> 8443
+```
+
+---
+
+## 2. Generate A Trust Token
 
 On the **incus server:**
 
@@ -135,6 +162,11 @@ provider "incus" {
 
 The variables can be set at `terraform.tfvars` file
 
+> [!TIP]
+>
+> For CI/CD, avoid storing tokens in `terraform.tfvars`. Use CI secrets and environment variables
+> instead.
+
 ## 4. Apply
 
 Run opentofu normally:
@@ -171,7 +203,7 @@ incus config trust remove <fingerprint>
 ### On Local Machine
 
 ```bash
-# If we have the 'Incus client' installed (optional but convenient)
+# If we have the 'incus client' installed (optional but convenient)
 # (Optional) List remote configuration
 incus remote list
 
@@ -186,3 +218,44 @@ rm -rf .terraform .terraform.lock.hcl terraform.tfstate
 ```
 
 Then we can continue from [Step 2. Generate a Trust Token](#2-generate-a-trust-token) above.
+
+---
+
+## Troubleshooting
+
+### Common Error: Connection Timeout
+
+If OpenTofu returns an error similar to:
+
+```shell
+dial tcp 192.168.1.100:8443: i/o timeout
+```
+
+check the following:
+
+1. Verify the Incus HTTPS API is enabled:
+
+   ```bash
+   incus config get core.https_address
+   ```
+
+2. Verify Incus is listening on port `8443`:
+
+   ```bash
+   ss -tlnp | grep 8443
+   ```
+
+3. Verify the firewall allows TCP port `8443`:
+
+   ```bash
+   sudo ufw allow 8443/tcp
+   ```
+
+4. Verify the control machine can reach the API:
+
+   ```bash
+   nc -vz 192.168.1.100 8443
+   ```
+
+A timeout error occurs before authentication and trust-token validation. It usually indicates a
+networking or firewall issue.
