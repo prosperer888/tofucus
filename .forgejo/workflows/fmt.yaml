@@ -1,0 +1,30 @@
+name: "OpenTofu Code Formatting"
+
+on:
+  push:
+    paths:
+      - "**/*.tf"
+      - "**/*.tfvars"
+  pull_request:
+    paths:
+      - "**/*.tf"
+      - "**/*.tfvars"
+
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Check tofu fmt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: 1.11.6
+          cache: true
+
+      - name: Run tofu fmt Check
+        run: tofu fmt -check
