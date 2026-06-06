@@ -121,3 +121,23 @@ variable "timezone" {
   default     = "UTC"
   description = "System timezone for the container (e.g. 'Asia/Kuala_Lumpur', 'Europe/Rome'). Defaults to 'UTC'."
 }
+
+variable "incus_remote_name" {
+  type        = string
+  default     = "local"
+  description = "The default remote to use (default are 'local')"
+}
+
+variable "incus_remote_address" {
+  type        = string
+  default     = "unix://"
+  sensitive   = false
+  description = "Address of the incus remote (e.g., 'unix://' or 'https://192.168.1.100:8443'. Default are 'unix://')"
+}
+
+variable "incus_remote_token" {
+  type        = string
+  default     = null
+  sensitive   = true
+  description = "Trust token for the incus remote (required for HTTPS remotes (if not using 'unix://' socket))"
+}
