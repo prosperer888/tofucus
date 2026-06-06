@@ -108,7 +108,7 @@ There are 2 options to create the `main.tf` file:
 // https://opentofu.org/docs/language/modules/sources/#support-for-variable-and-local-evaluation
 locals {
   modules_repo = "https://github.com/prosperer888/tofucus.git"
-  modules_version = "?ref=v1.3.1"
+  modules_version = "?ref=v1.4.1"
 
   // project metadata variable
   // check with command below:
@@ -137,6 +137,18 @@ module "containers" {
   timezone           = var.timezone
 }
 
+provider "incus" {
+  generate_client_certificates = true
+  accept_remote_certificate    = true
+  default_remote               = var.incus_remote_name
+
+  remote {
+    name    = var.incus_remote_name
+    address = var.incus_remote_address
+    token   = var.incus_remote_token
+  }
+}
+
 output "containers" {
   value = module.containers.containers
 }
@@ -157,7 +169,7 @@ This directly uses the **Child Module** inside `modules/*` directory.
 ```hcl
 locals {
   modules_repo = "https://github.com/prosperer888/tofucus.git"
-  modules_version = "?ref=v1.3.1"
+  modules_version = "?ref=v1.4.1"
 
   // project metadata variable
   // check with command below:
@@ -195,6 +207,18 @@ module "containers" {
   ssh_key       = var.ssh_public_key
   username      = var.username
   timezone      = var.timezone
+}
+
+provider "incus" {
+  generate_client_certificates = true
+  accept_remote_certificate    = true
+  default_remote               = var.incus_remote_name
+
+  remote {
+    name    = var.incus_remote_name
+    address = var.incus_remote_address
+    token   = var.incus_remote_token
+  }
 }
 
 output "containers" {
@@ -280,6 +304,23 @@ variable "timezone" {
   type    = string
   default = "UTC"
 }
+
+variable "incus_remote_name" {
+  type        = string
+  default     = "local"
+}
+
+variable "incus_remote_address" {
+  type        = string
+  default     = "unix://"
+  sensitive   = false
+}
+
+variable "incus_remote_token" {
+  type        = string
+  default     = null
+  sensitive   = true
+}
 ```
 
 ## terraform.tfvars
@@ -350,6 +391,28 @@ incus_storage_pool = "default"
 ssh_public_key     = "ssh-ed25519 AAAA... user@host"
 username           = "incus"
 timezone           = "Asia/Kuala_Lumpur"
+### =============================== ###
+# incus remote connection configuration
+### =============================== ###
+# incus host address, must start with 'https'. Default are 'unix://'
+# use command below to check port that we set when we run 'incus init' after we installed incus:
+#
+# 'incus config show'
+incus_remote_address = "unix://"
+# incus_remote_address = "https://192.168.1.100:8443"
+
+# name of 'default_remote' for incus remote. Default are 'local'
+# If using other name, other then 'local', we need to set/configure thus name on incus server/host,
+# and use the generated token on 'incus_remote_token' variable
+#
+# 'incus config trust add <trust-token-name-can-use-any-name>'
+incus_remote_name    = "local"
+# incus_remote_name    = "homelab"
+
+# Must provide token when using 'https' connection in 'incus_remote_address' variable.
+# E.G. (incus_remote_address = "https://...")
+# Use the generated token from when we run 'incus config trust add <trust-token-name-can-use-any-name>'
+incus_remote_token   = ""
 ```
 
 ## versions.tf
