@@ -1,4 +1,4 @@
-name: "OpenTofu Code Formatting"
+name: OpenTofu Code Formatting
 
 on:
   push:
@@ -26,5 +26,11 @@ jobs:
           tofu_version: 1.11.6
           cache: true
 
-      - name: Run tofu fmt Check
+      - name: OpenTofu format
         run: tofu fmt -check
+
+      - name: OpenTofu init
+        run: tofu init
+
+      - name: OpenTofu validate
+        run: tofu validate -no-color
