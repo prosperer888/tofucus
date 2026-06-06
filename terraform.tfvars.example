@@ -65,3 +65,26 @@ username             = "incus"
 
 # System timezone inside the container (e.g. 'Asia/Kuala_Lumpur', 'Europe/Rome'). Defaults to 'UTC'.
 timezone             = "Asia/Kuala_Lumpur"
+
+### =============================== ###
+# incus remote connection configuration
+### =============================== ###
+# incus host address, must start with 'https'. Default are 'unix://'
+# use command below to check port that we set when we run 'incus init' after we installed incus:
+#
+# 'incus config show'
+incus_remote_address = "unix://"
+# incus_remote_address = "https://192.168.1.100:8443"
+
+# name of 'default_remote' for incus remote. Default are 'local'
+# If using other name, other then 'local', we need to set/configure thus name on incus server/host,
+# and use the generated token on 'incus_remote_token' variable
+#
+# 'incus config trust add <trust-token-name-can-use-any-name>'
+incus_remote_name    = "local"
+# incus_remote_name    = "homelab"
+
+# Must provide token when using 'https' connection in 'incus_remote_address' variable.
+# E.G. (incus_remote_address = "https://...")
+# Use the generated token from when we run 'incus config trust add <trust-token-name-can-use-any-name>'
+incus_remote_token   = ""
