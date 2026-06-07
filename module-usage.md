@@ -249,7 +249,7 @@ output "reminder" {
 > - With remote source:
 >
 >   ```hcl
->   source = "git::https://gitea.local/myuser/tofucus.git//modules/instances"
+>   source = "git::https://github.com/prosperer888/tofucus.git//modules/instances"
 >   ```
 
 ## variables.tf
