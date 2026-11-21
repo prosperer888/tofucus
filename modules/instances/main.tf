@@ -21,6 +21,12 @@ locals {
       // useful for docker inside incus. (not yet try if using btrfs or zfs require it or not)
       nesting  = var.nesting
     })
+    "cloud-init.network-config" = templatefile("${path.module}/template/network-config.yaml.tftpl", {
+      dhcp_enabled = var.dhcp_enabled
+      ipv4_address = var.ipv4_address
+      ipv4_gateway = var.ipv4_gateway
+      dns_nameservers = var.dns_nameservers
+    })
   }
 }
 
@@ -49,12 +55,15 @@ resource "incus_instance" "vm" {
   device {
     name = "eth0"
     type = "nic"
-    properties = {
-      nictype  = var.nic_type
-      parent   = var.network_name
-      // sets static ip
-      "ipv4.address" = var.ipv4_address
-    }
+    properties = merge(
+      {
+        nictype = var.nic_type
+        parent  = var.network_name
+      },
+      var.dhcp_enabled && var.ipv4_address != null ? {
+        "ipv4.address" = var.ipv4_address
+      } : {}
+    )
   }
 
   // https://linuxcontainers.org/incus/docs/main/reference/devices_disk/#type-disk

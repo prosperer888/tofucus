@@ -1,5 +1,4 @@
 variable "instance_name" { type = string }
-variable "ipv4_address"  { type = string }
 variable "image"         { type = string }
 variable "storage_pool"  { type = string }
 variable "network_name"  { type = string }
@@ -32,4 +31,28 @@ variable "extra_config" {
   description = "Extra incus configuration key/value pairs to merge into the main container's config."
   type        = map(string)
   default     = {}
+}
+
+variable "ipv4_address" {
+  description = "Static IPv4 address for the instance, or null when using DHCP without an Incus reservation"
+  type        = string
+  default     = null
+}
+
+variable "dhcp_enabled" {
+  description = "Whether containers should obtain their IP addresses through DHCP"
+  type        = bool
+  default     = true
+}
+
+variable "ipv4_gateway" {
+  description = "IPv4 gateway for unmanaged bridge networking"
+  type        = string
+  default     = null
+}
+
+variable "dns_nameservers" {
+  description = "DNS servers for container network configuration"
+  type        = list(string)
+  default     = ["1.1.1.1", "8.8.8.8"]
 }

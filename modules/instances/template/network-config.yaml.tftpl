@@ -1,0 +1,16 @@
+version: 1
+config:
+  - type: physical
+    name: eth0
+    subnets:
+%{ if dhcp_enabled ~}
+      - type: dhcp
+%{ else ~}
+      - type: static
+        address: ${ipv4_address}/24
+        gateway: ${ipv4_gateway}
+        dns_nameservers:
+%{ for dns in dns_nameservers ~}
+          - ${dns}
+%{ endfor ~}
+%{ endif ~}

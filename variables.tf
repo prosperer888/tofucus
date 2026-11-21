@@ -6,11 +6,11 @@
 
 variable "incus_instances" {
   type = map(object({
-    ip      = string
+    ip      = optional(string, null)
     cpu     = number
     memory  = string
     nesting = optional(bool, false)
-    bind_mounts = optional(list(object({
+    bind_mounts  = optional(list(object({
       host_path  = string
       mount_path = string
       readonly   = optional(bool, false)
@@ -18,7 +18,7 @@ variable "incus_instances" {
     })), [])
     extra_config = optional(map(string), {})
   }))
-  description = "Map of container names to their configuration. Each entry requires a static IPv4 address (e.g. '10.150.19.50'), CPU cores as number (e.g. 2), and memory limit (e.g. '2GiB')."
+  description = "Map of container names to their configuration. Each entry requires CPU cores as number (e.g. 2), and memory limit (e.g. '2GiB'). IP is optional when using DHCP."
 
   // host path validation
   validation {
@@ -54,18 +54,30 @@ variable "incus_instances" {
   validation {
     condition = alltrue([
       for inst in var.incus_instances :
-      can(cidrhost("${inst.ip}/32", 0))
+      inst.ip == null || can(cidrhost("${inst.ip}/32", 0))
     ])
-    error_message = "IP must be a valid IPv4 address."
+    error_message = "IP must be a valid IPv4 address or null when using DHCP."
   }
 
-  // Duplicate ip validation
+  // Duplicate IP validation
   validation {
     condition = length(distinct([
       for inst in var.incus_instances : inst.ip
-    ])) == length(var.incus_instances)
-
+      if inst.ip != null
+    ])) == length([
+      for inst in var.incus_instances : inst.ip
+      if inst.ip != null
+    ])
     error_message = "Duplicate IP addresses are not allowed."
+  }
+
+  // Static IP requirement
+  validation {
+    condition = var.incus_dhcp_enabled || alltrue([
+      for inst in var.incus_instances :
+      inst.ip != null
+    ])
+    error_message = "Every instance must have a static IP address when DHCP is disabled."
   }
 }
 
@@ -140,4 +152,22 @@ variable "incus_remote_token" {
   default     = null
   sensitive   = true
   description = "Trust token for the incus remote (required for HTTPS remotes (if not using 'unix://' socket))"
+}
+
+variable "incus_dhcp_enabled" {
+  description = "Whether containers should obtain their IP addresses through DHCP"
+  type        = bool
+  default     = true
+}
+
+variable "incus_gateway" {
+  description = "IPv4 gateway for unmanaged bridge networking"
+  type        = string
+  default     = null
+}
+
+variable "incus_dns_servers" {
+  description = "DNS servers for containers using static network configuration"
+  type        = list(string)
+  default     = ["1.1.1.1", "8.8.8.8"]
 }

@@ -1,26 +1,63 @@
-# Required container configuration.
-#   ip      - static IPv4 address within incus network subnet (e.g. 10.150.19.50)
-#   cpu     - number of CPU cores allocated to the container (e.g. 2)
-#   memory  - memory limit with unit (e.g. "2GiB" or "512MiB")
-#   nesting - optionally enable nesting to run nested virtualization inside container (default "false")
-# Ensure the IP address is not already used and falls inside the subnet.
-# Use 'incus network list' to find the subnet (look for "inet" address of the bridge).
+```hcl
+# ============================================================
+# Container configuration
+# ============================================================
 #
-# https://linuxcontainers.org/incus/docs/main/faq/#can-i-bind-mount-my-home-directory-in-a-container
-# Optional bind mounts from host to container.
-#   host_path  - existing directory on the host (use absolute path, e.g. /home/user/data)
-#   mount_path - destination path inside the container (e.g. /media)
-#   readonly   - set to true for read only access (default false)
-#   shift      - enable idmapped mounts to fix permission issues
+# Required:
+#   cpu    - Number of CPU cores allocated to the container (e.g. 2).
+#   memory - Memory limit with unit (e.g. "2GiB" or "512MiB").
 #
-# https://linuxcontainers.org/incus/docs/main/reference/instance_options
-#   extra_config - Optionally add extra instance options from link above
+# Optional:
+#   ip      - Static IPv4 address for the container.
+#             Use null when DHCP is enabled and you don't want
+#             to specify a static IP address.
+#   nesting - Enable nesting to run nested virtualization inside
+#             the container (default: false).
+#
+# Networking notes:
+#   - Managed Incus bridge (e.g. incusbr0):
+#       Incus manages DHCP. You can optionally provide an IP
+#       address to create a DHCP reservation.
+#
+#   - Unmanaged Linux bridge (e.g. br0):
+#       With DHCP enabled, your external DHCP server (usually
+#       your router) assigns the IP address. Use ip = null.
+#
+#       With DHCP disabled, cloud-init configures the static IP.
+#       You must provide an IP address and gateway.
+#
+#   - Make sure static IP addresses are not already in use and
+#     belong to the correct network subnet.
+#
+#   - For Incus managed bridges, use 'incus network list' to
+#     check the network subnet.
+#
+# Optional bind mounts:
+#   host_path  - Existing directory on the host (absolute path).
+#                Example: /home/user/data
+#   mount_path - Destination path inside the container.
+#                Example: /media
+#   readonly   - Set to true for read-only access (default: false).
+#   shift      - Enable idmapped mounts to help fix permission
+#                issues (default: false).
+#
+#   Documentation:
+#   https://linuxcontainers.org/incus/docs/main/faq/#can-i-bind-mount-my-home-directory-in-an-incus-container
+#
+# Optional extra configuration:
+#   extra_config - Additional Incus instance configuration options.
+#
+#   Documentation:
+#   https://linuxcontainers.org/incus/docs/main/reference/instance_options/
+#
 incus_instances = {
+  # Incus managed bridge with static DHCP reservation
   "c1" = {
     ip      = "10.150.19.50"
     cpu     = 2
     memory  = "2GiB"
     nesting = false
+
     bind_mounts = [
       {
         host_path  = "/home/user/data"
@@ -29,62 +66,146 @@ incus_instances = {
         shift      = true
       }
     ]
+
     extra_config = {
       "boot.autostart.priority" = "50"
     }
   }
+
+  # Incus managed bridge with static DHCP reservation
   "c2" = {
-    ip           = "10.150.19.51"
-    cpu          = 1
-    memory       = "1GiB"
+    ip     = "10.150.19.51"
+    cpu    = 1
+    memory = "1GiB"
+
     extra_config = {
       "boot.autostart.priority" = "100"
     }
   }
+
+  # DHCP without a static IP reservation
+  "c3" = {
+    ip     = null
+    cpu    = 2
+    memory = "2GiB"
+  }
+
+  # DHCP without a static IP reservation, with nesting enabled
+  "c4" = {
+    ip      = null
+    cpu     = 4
+    memory  = "4GiB"
+    nesting = true
+
+    extra_config = {
+      "boot.autostart.priority" = "150"
+    }
+  }
 }
 
-# The OS image to use for all containers. Must be a 'cloud' image (e.g. 'debian/12/cloud').
-incus_image          = "debian/12/cloud"
 
-# The name of the Incus network bridge to attach the containers to (e.g. 'incusbr0').
-incus_network        = "incusbr0"
+# ============================================================
+# Container image and storage
+# ============================================================
 
-# The type of network interface for the container. Usually 'bridged'.
-incus_nic_type       = "bridged"
+# OS image to use for all containers.
+# Must be a cloud image with cloud-init support.
+# Examples: "debian/12/cloud", "ubuntu/22.04/cloud".
+incus_image = "debian/12/cloud"
 
-# Name of the Incus storage pool used for container disks (e.g. default).
-incus_storage_pool   = "default"
+# Name of the Incus storage pool used for container disks.
+# Example: "default".
+incus_storage_pool = "default"
 
-# The full text of your SSH public key (e.g. the content of ~/.ssh/id_ed25519.pub) for remote access.
-# Tip: Can use this command:
+
+# ============================================================
+# Container networking
+# ============================================================
+
+# Name of the network bridge to attach containers to.
+#
+# Examples:
+#   "incusbr0" - Incus managed bridge.
+#   "br0"      - Existing unmanaged Linux bridge.
+incus_network = "incusbr0"
+
+# Type of network interface.
+# Available options: "bridged", "macvlan", "ovn".
+# Usually "bridged".
+incus_nic_type = "bridged"
+
+# Whether containers should obtain their IP addresses through DHCP.
+#
+# true:
+#   - Managed bridge: Incus DHCP assigns the IP.
+#   - Unmanaged bridge: External DHCP server assigns the IP.
+#
+# false:
+#   - Cloud-init configures static IP addresses.
+#   - Every container must have an IP address.
+incus_dhcp_enabled = true
+
+# IPv4 gateway for static network configuration.
+# Required when incus_dhcp_enabled = false.
+# Example: "192.168.0.1".
+# Not required when DHCP is enabled.
+incus_gateway = null
+
+# DNS servers for static network configuration.
+# DHCP normally provides DNS information automatically.
+incus_dns_servers = [
+  "1.1.1.1",
+  "8.8.8.8"
+]
+
+
+# ============================================================
+# SSH and user configuration
+# ============================================================
+
+# Full text of your SSH public key for remote access.
+# Example: content of ~/.ssh/id_ed25519.pub.
+#
+# Alternatively, provide it when running:
 # tofu apply -var="ssh_public_key=$(cat ~/.ssh/id_ed25519.pub)"
-ssh_public_key       = "ssh-ed25519 AAAA... user@host"
+ssh_public_key = "ssh-ed25519 AAAA... user@host"
 
-# The name of the non-root sudo user that will be created inside the container.
-username             = "incus"
+# Non-root sudo user created inside the containers.
+username = "incus"
 
-# System timezone inside the container (e.g. 'Asia/Kuala_Lumpur', 'Europe/Rome'). Defaults to 'UTC'.
-timezone             = "Asia/Kuala_Lumpur"
+# System timezone inside the containers.
+# Examples: "Asia/Kuala_Lumpur", "Europe/Rome".
+# Default: "UTC".
+timezone = "Asia/Kuala_Lumpur"
 
-### =============================== ###
-# incus remote connection configuration
-### =============================== ###
-# incus host address, must start with 'https'. Default are 'unix://'
-# use command below to check port that we set when we run 'incus init' after we installed incus:
+
+# ============================================================
+# Incus remote connection configuration
+# ============================================================
+
+# Incus server address.
+# Use "unix://" for the local Incus socket.
+# For remote connections, use HTTPS with the appropriate port.
 #
-# 'incus config show'
+# Check the server configuration using:
+# incus config show
+#
+# Example: "https://192.168.1.100:8443".
 incus_remote_address = "unix://"
-# incus_remote_address = "https://192.168.1.100:8443"
 
-# name of 'default_remote' for incus remote. Default are 'local'
-# If using other name, other then 'local', we need to set/configure thus name on incus server/host,
-# and use the generated token on 'incus_remote_token' variable
+# Name of the configured Incus remote.
+# Default: "local".
 #
-# 'incus config trust add <trust-token-name-can-use-any-name>'
-incus_remote_name    = "local"
-# incus_remote_name    = "homelab"
+# For remote connections, configure the remote on your
+# local machine using:
+# incus remote add <name> <address>
+incus_remote_name = "local"
 
-# Must provide token when using 'https' connection in 'incus_remote_address' variable.
-# E.G. (incus_remote_address = "https://...")
-# Use the generated token from when we run 'incus config trust add <trust-token-name-can-use-any-name>'
-incus_remote_token   = ""
+# Trust token for HTTPS remote connections.
+# Generate a token on the Incus server using:
+# incus config trust add <token-name>
+#
+# Required when connecting to a remote server that requires
+# certificate trust. Keep this value secret.
+incus_remote_token = ""
+```
