@@ -2,19 +2,19 @@
 
 `tofucus` – OpenTofu module for managing Incus containers.
 
-An OpenTofu configuration that deploys [incus](https://linuxcontainers.org/incus/) containers with
-**static IPs, resource limits, cloud‑init provisioning and optional bind mounts (host
-directories)**.
+An OpenTofu configuration that deploys [Incus](https://linuxcontainers.org/incus/) containers with
+**DHCP or static IPv4 addresses, resource limits, cloud-init provisioning, and optional bind mounts
+(host directories)**.
 
-This module uses opentofu provider from
-[lxc/incus](https://search.opentofu.org/provider/lxc/incus/latest), incus opentofu provider,
-`Resources` and `Data Sources` configurations can be view at
-[documentations](https://search.opentofu.org/provider/lxc/incus/latest).
+This module uses the OpenTofu provider from
+[lxc/incus](https://search.opentofu.org/provider/lxc/incus/latest). We can view the provider's
+resources and data sources in its
+[documentation](https://search.opentofu.org/provider/lxc/incus/latest).
 
 > [!WARNING]
 >
-> Only works with incus images that include cloud-init (usually images with `/cloud` in the name).
-> This module supports **containers only** (not Incus virtual machines).
+> - Only works with Incus images that include cloud-init (usually images with `/cloud` in the name).
+> - This module supports **containers only** (not Incus virtual machines).
 
 <!-- TABLE OF CONTENTS -->
 
@@ -32,13 +32,24 @@ This module uses opentofu provider from
   - [Incus](#incus)
 - [Project Structure](#project-structure)
 - [Variables](#variables)
+  - [Container Configuration](#container-configuration)
+  - [Networking Configuration](#networking-configuration)
+    - [1. Incus-managed bridge with DHCP](#1-incus-managed-bridge-with-dhcp)
+    - [2. Unmanaged Linux bridge with DHCP](#2-unmanaged-linux-bridge-with-dhcp)
+    - [3. Unmanaged Linux bridge with a static IP](#3-unmanaged-linux-bridge-with-a-static-ip)
+  - [Bind Mounts](#bind-mounts)
+  - [Example `terraform.tfvars`](#example-terraformtfvars)
+  - [Running Docker Inside an Incus Container](#running-docker-inside-an-incus-container)
 - [Usage](#usage)
   - [Adding or Removing Containers](#adding-or-removing-containers)
+  - [Attaching Shared Directories to Containers](#attaching-shared-directories-to-containers)
   - [Quick Start](#quick-start)
   - [Outputs](#outputs)
 - [How It Works](#how-it-works)
 - [Troubleshooting](#troubleshooting)
-  - [Container created but cannot SSH](#container-created-but-cannot-ssh)
+  - [Container Created but Cannot SSH](#container-created-but-cannot-ssh)
+  - [Container Does Not Get an IP Address](#container-does-not-get-an-ip-address)
+  - [Bind Mount Permission Denied](#bind-mount-permission-denied)
 - [TODO](#todo)
 - [License](#license)
 
@@ -50,27 +61,36 @@ This module uses opentofu provider from
 
 ## Description
 
-This opentofu configuration will:
+This OpenTofu configuration will:
 
-- Create multiple containers using a simple map variable
-- Assign **static IPv4 addresses** on a bridged network (`incusbr0`)
-- Set **CPU and memory** limits per container
-- **Optionally Bind mounts (host directories)** into containers
-- **Optionally add extra configs.**
-  [Instance Options](https://linuxcontainers.org/incus/docs/main/reference/instance_options)
+- Create multiple containers using a simple map variable.
+- Support **DHCP and static IPv4 addresses**.
+- Support both **Incus-managed bridges** (e.g. `incusbr0`) and **unmanaged Linux bridges** (e.g.
+  `br0`).
+- Set **CPU and memory** limits per container.
+- Optionally bind mount host directories into containers.
+- Optionally add extra configurations from
+  [Incus instance options](https://linuxcontainers.org/incus/docs/main/reference/instance_options/).
 - Automatically:
-  - Create a non‑root user with passwordless sudo
-  - Adds SSH key
-  - Installs common packages (`curl`, `git`, `openssh-server`, `python3`)
-  - Enables and starts SSH
-  - Works across **debian/ubuntu, redhat/fedora, and arch linux** if they have an incus cloud image.
+  - Create a non-root user with passwordless sudo.
+  - Add an SSH public key.
+  - Install common packages (`curl`, `git`, `openssh-server`, `python3`).
+  - Enable and start SSH.
+  - Support Debian/Ubuntu, Red Hat/Fedora, and Arch Linux images that include cloud-init.
 
 <!-- SUPPORTED PLATFORMS -->
 
 ## Supported Platforms (container images)
 
-- Supported for **debian/ubuntu, redhat family, and arch linux** using incus cloud images (images
-  ending with /cloud). Use incus command `incus image list images:` to search available images.
+- Debian/Ubuntu
+- Red Hat/Fedora family
+- Arch Linux
+
+Use Incus cloud images (images ending with `/cloud`). We can search available images with:
+
+```shell
+incus image list images:
+```
 
 <!-- REQUIREMENTS -->
 
@@ -79,24 +99,30 @@ This opentofu configuration will:
 ### OpenTofu
 
 - OpenTofu >= 1.9.1
-- Provider [`lxc/incus`](https://registry.terraform.io/providers/lxc/incus/latest) >= 0.3.1
-  (automatically downloaded on `tofu init`)
+- Provider [`lxc/incus`](https://search.opentofu.org/provider/lxc/incus/latest) >= 0.3.1
+  (automatically downloaded when running `tofu init`).
 
 ### Incus
 
-- Incus installed and initialised (`incus admin init`)
-- A **bridged network** (default: `incusbr0`) with an available IP range. (`incus network list`)
-- A **storage pool** (default: `default`)
-- User must have permission to access the incus socket (usually member of the `incus-admin` group)
+- Incus installed and initialised (`incus admin init`).
+- A network bridge, such as `incusbr0` or an existing Linux bridge such as `br0`.
+- A storage pool (default: `default`).
+- User must have permission to access the Incus socket (usually a member of the `incus-admin`
+  group).
+- Incus cloud images available (example: `debian/12/cloud`).
 
-Incus `cloud` images available (example: **debian/12/cloud**)
+We can check our available networks and storage pools with:
 
-<!-- Project Structure -->
+```shell
+incus network list
+incus storage list
+```
+
+<!-- PROJECT STRUCTURE -->
 
 ## Project Structure
 
 ```shell
-: tree
 .
 ├── main.tf
 ├── modules
@@ -104,7 +130,8 @@ Incus `cloud` images available (example: **debian/12/cloud**)
 │       ├── main.tf
 │       ├── outputs.tf
 │       ├── template
-│       │   └── cloud-init.yaml.tftpl
+│       │   ├── cloud-init.yaml.tftpl
+│       │   └── network-config.yaml.tftpl
 │       ├── variables.tf
 │       └── versions.tf
 ├── outputs.tf
@@ -121,28 +148,34 @@ Incus `cloud` images available (example: **debian/12/cloud**)
 
 Variables are defined in `variables.tf` and can be overridden in `terraform.tfvars`.
 
-| Variable             | Type                                          |        Required        | Description                                                                                                                                                 |
-| -------------------- | --------------------------------------------- | :--------------------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `incus_instances`    | `map(object({ip, cpu, memory, bind_mounts}))` |          yes           | Container definitions including IP, CPU, memory, and optional bind mounts.<br><br>See below example on how to map `incus_instances`                         |
-| `incus_image`        | `string`                                      |          yes           | Image name. (cloud image required. E.G. `debian/12/cloud`).                                                                                                 |
-| `incus_storage_pool` | `string`                                      |          yes           | Storage pool name (e.g. `default`).                                                                                                                         |
-| `incus_network`      | `string`                                      |          yes           | Network interface (e.g. `incusbr0`).                                                                                                                        |
-| `incus_nic_type`     | `string`                                      | yes(default `bridged`) | Type of network interface. Use `bridged` for attaching to an existing incus bridge, or `macvlan` for direct physical network access. Defaults to `bridged`. |
-| `ssh_public_key`     | `string`                                      |          yes           | Content of your SSH public key.                                                                                                                             |
-| `username`           | `string`                                      |          yes           | Non‑root user name inside containers. (default: `incus`)                                                                                                    |
-| `timezone`           | `string`                                      |           no           | Timezone (default: `UTC`).                                                                                                                                  |
+| Variable             | Type               | Required | Description                                                                    |
+| -------------------- | ------------------ | :------: | ------------------------------------------------------------------------------ |
+| `incus_instances`    | `map(object(...))` |   Yes    | Container definitions, including IP, CPU, memory, and optional settings.       |
+| `incus_image`        | `string`           |   Yes    | Incus image name (e.g. `debian/12/cloud`).                                     |
+| `incus_storage_pool` | `string`           |   Yes    | Incus storage pool name (e.g. `default`).                                      |
+| `incus_network`      | `string`           |   Yes    | Network or bridge name (e.g. `incusbr0` or `br0`).                             |
+| `incus_nic_type`     | `string`           |    No    | Network interface type. Defaults to `bridged`.                                 |
+| `incus_dhcp_enabled` | `bool`             |    No    | Whether containers obtain their IP addresses through DHCP. Defaults to `true`. |
+| `incus_gateway`      | `string`           | Depends  | IPv4 gateway used for static network configuration.                            |
+| `incus_dns_servers`  | `list(string)`     |    No    | DNS servers used for static network configuration.                             |
+| `ssh_public_key`     | `string`           |   Yes    | Content of our SSH public key.                                                 |
+| `username`           | `string`           |    No    | Non-root username inside containers (default: `incus`).                        |
+| `timezone`           | `string`           |    No    | Container timezone (default: `UTC`).                                           |
 
-Structure for `incus_instances`
+### Container Configuration
+
+The `incus_instances` variable uses a map of objects.
 
 ```hcl
 incus_instances = {
   "<name>" = {
-    ip     = string
-    cpu    = number
-    memory = string
+    ip      = optional(string, null)
+    cpu     = number
+    memory  = string
 
-    # optional
-    nesting     = bool
+    # Optional
+    nesting = bool
+
     bind_mounts = [
       {
         host_path  = string
@@ -151,64 +184,188 @@ incus_instances = {
         shift      = bool
       }
     ]
-    extra_config   = map(string)
-    # extra_config   = { "key" = "value" }   # optional
+
+    extra_config = map(string)
   }
 }
 ```
 
-Required container configuration for `incus_instances`.
+Required container configuration:
 
-- `ip` - static IPv4 address within incus network subnet (e.g. 10.150.19.50)
-- `cpu` - number of CPU cores allocated to the container (e.g. 2)
-- `memory` - memory limit with unit (e.g. "2GiB" or "512MiB")
+- `ip` - Static IPv4 address for the container. Use `null` when we want to used DHCP.
+- `cpu` - Number of CPU cores allocated to the container (e.g. `2`).
+- `memory` - Memory limit with unit (e.g. `2GiB` or `512MiB`).
 
-Make sure the IP address is not already in used and use same subnet. Use `incus network list` to
-find the subnet (look for **"inet"** address of the bridge).
+Optional container configuration:
 
-**Optional** variable
+- `nesting` - Enable nested virtualization inside the container (default: `false`).
+- `bind_mounts` - List of host directories to mount inside the container (default: `[]`).
+- `extra_config` - Additional Incus instance configurations from
+  [Incus instance options](https://linuxcontainers.org/incus/docs/main/reference/instance_options/)
+  (default: `{}`).
 
-- `extra_config` - Optionally add extra configurations from
-  [instance options](https://linuxcontainers.org/incus/docs/main/reference/instance_options).
-  (Default `{}`)
-- `nesting` - Optionally enable nested virtualization inside container (e.g. "true". Default are
-  "false")
+The `ip` field is optional and defaults to `null`. We can either set it to `null` or leave it out
+when using DHCP without a static reservation.
+
+For example:
+
+```hcl
+incus_instances = {
+  "web" = {
+    ip     = "10.150.19.50"
+    cpu    = 2
+    memory = "2GiB"
+  }
+
+  "worker" = {
+    ip     = null
+    cpu    = 1
+    memory = "1GiB"
+  }
+}
+```
 
 > [!NOTE]
 >
-> **If we want to run docker container inside incus container,** we need to enable/set
-> `nesting = true`, we must also configure docker to use the `fuse-overlayfs` storage driver (**not
-> yet** try with `btrfs` or `zfs`). Inside the container, create `/etc/docker/daemon.json` after
-> installing docker:
->
-> ```shell
-> # fuse-overlayfs will be install when set 'nesting = true' (cloud-init)
->
-> vi /etc/docker/daemon.json
-> ```
->
-> Insert below json content inside `daemon.json` file
->
-> ```json
-> {
->   "storage-driver": "fuse-overlayfs"
-> }
-> ```
->
-> Then restart Docker: `systemctl restart docker`. This avoids the `invalid argument` error with
-> overlayfs on an already‑nested filesystem. E.G. when run `docker compose up -d` error will occur
-> when use default docker `storage-driver`
+> The `memory` field only accepts values in `MiB` or `GiB` (e.g. `512MiB`, `2GiB`). Other units such
+> as `MB`, `GB`, or `KiB` are not allowed by this module.
 
-**Bind Mount** host directory into containers
+### Networking Configuration
 
-<https://linuxcontainers.org/incus/docs/main/faq/#can-i-bind-mount-my-home-directory-in-a-container>
+This module supports both Incus-managed bridges and unmanaged Linux bridges.
 
-Optionally mount host directories into containers (bind mounts)
+The networking behavior depends on our bridge and DHCP settings.
 
-- `host_path` - existing directory on the host (use absolute path, e.g. /home/user/data)
-- `mount_path` - destination path inside the container (e.g. /media)
-- `readonly` - set to true for read‑only access (default false)
-- `shift` - enable idmapped mounts to fix permission issues
+| Network type                           | DHCP enabled | IP value  | Result                                             |
+| -------------------------------------- | ------------ | --------- | -------------------------------------------------- |
+| Incus-managed bridge (e.g. `incusbr0`) | `true`       | `null`    | Incus DHCP assigns an IP address.                  |
+| Incus-managed bridge (e.g. `incusbr0`) | `true`       | Static IP | Incus uses the IP as a DHCP reservation.           |
+| Unmanaged Linux bridge (e.g. `br0`)    | `true`       | `null`    | External DHCP server/router assigns an IP address. |
+| Unmanaged Linux bridge (e.g. `br0`)    | `false`      | Static IP | Cloud-init configures the static IP address.       |
+
+#### 1. Incus-managed bridge with DHCP
+
+For an Incus-managed bridge such as `incusbr0`, Incus provides DHCP.
+
+Set:
+
+```hcl
+incus_network      = "incusbr0"
+incus_dhcp_enabled = true
+incus_gateway      = null
+```
+
+Example container configuration:
+
+```hcl
+incus_instances = {
+  "web" = {
+    ip     = null
+    cpu    = 2
+    memory = "2GiB"
+  }
+}
+```
+
+Incus DHCP assigns an IP address to the container.
+
+We can also provide an IP address if we want Incus to reserve that address for the container:
+
+```hcl
+incus_instances = {
+  "web" = {
+    ip     = "10.150.19.50"
+    cpu    = 2
+    memory = "2GiB"
+  }
+}
+```
+
+In this case, Incus DHCP assigns the reserved IP address to the container.
+
+#### 2. Unmanaged Linux bridge with DHCP
+
+We can also use an existing Linux bridge, such as `br0`, connected to our physical network.
+
+Set:
+
+```hcl
+incus_network      = "br0"
+incus_dhcp_enabled = true
+incus_gateway      = null
+```
+
+Example container configuration:
+
+```hcl
+incus_instances = {
+  "web" = {
+    ip     = null
+    cpu    = 2
+    memory = "2GiB"
+  }
+}
+```
+
+The external DHCP server (usually our router) assigns an IP address to the container.
+
+Because `br0` is an unmanaged bridge, Incus does not manage DHCP reservations for it. Leave
+`ip = null` when using DHCP this way.
+
+#### 3. Unmanaged Linux bridge with a static IP
+
+We can configure a static IP address when using an unmanaged Linux bridge.
+
+Set:
+
+```hcl
+incus_network      = "br0"
+incus_dhcp_enabled = false
+incus_gateway      = "192.168.0.1"
+incus_dns_servers  = ["1.1.1.1", "8.8.8.8"]
+```
+
+Example container configuration:
+
+```hcl
+incus_instances = {
+  "web" = {
+    ip     = "192.168.0.150"
+    cpu    = 2
+    memory = "2GiB"
+  }
+
+  "db" = {
+    ip     = "192.168.0.151"
+    cpu    = 1
+    memory = "1GiB"
+  }
+}
+```
+
+Cloud-init configures the static IP address, gateway, and DNS servers inside each container.
+
+> [!IMPORTANT]
+>
+> - Make sure static IP addresses belong to the correct subnet.
+> - Make sure the addresses are not already in use.
+> - Avoid assigning addresses inside our router's DHCP range unless we already reserved them.
+> - When using static IP configuration, provide a valid gateway.
+> - When using DHCP, the gateway and DNS information are normally provided by the DHCP server.
+
+### Bind Mounts
+
+Optionally mount host directories into containers.
+
+See the
+[Incus bind mount documentation](https://linuxcontainers.org/incus/docs/main/faq/#can-i-bind-mount-my-home-directory-in-a-container).
+
+Available options:
+
+- `host_path` - Existing directory on the host (use an absolute path, e.g. `/home/user/data`).
+- `mount_path` - Destination path inside the container (e.g. `/media`).
+- `readonly` - Set to `true` for read-only access (default: `false`).
+- `shift` - Enable idmapped mounts to help fix permission issues (default: `false`).
 
 > [!NOTE]
 >
@@ -221,35 +378,30 @@ Optionally mount host directories into containers (bind mounts)
 >
 > Bind mounts expose host directories directly to containers:
 >
-> - Deleting files inside the container will delete them on the host
-> - Incorrect permissions may break applications
-> - Use `shift = true` when needed to avoid permission issues
-> - Always double-check paths before running `tofu apply`
+> - Deleting files inside the container will also delete them on the host.
+> - Incorrect permissions may break applications.
+> - Use `shift = true` when needed to avoid permission issues.
+> - Always double-check paths before running `tofu apply`.
 
-**See below example on how to map `incus_instances`**
-
-<!-- EXAMPLE -->
-
-**Example** `terraform.tfvars`
+### Example `terraform.tfvars`
 
 ```hcl
-# terraform.tfvars
+# Container definitions.
+#
+# ip       - Static IPv4 address, or null when using DHCP without a reservation.
+# cpu      - Number of CPU cores allocated to the container.
+# memory   - Memory limit with unit (MiB or GiB).
+# nesting  - Optional. Enable nested virtualization inside the container.
+# bind_mounts - Optional. List of host directories to bind mount.
+# extra_config - Optional. Additional Incus instance configuration.
 
-# Required container configuration. Each entry must include:
-#   ip     - static IPv4 address within your Incus network subnet
-#   cpu    - number of CPU cores allocated to the container
-#   memory - memory limit with unit (MiB or GiB)
-#   nesting - (optional) set to true if want to use nested virtualization inside containers
-#   bind_mounts - (optional) list of host directories to bind mount into the container
-#   extra_config - (optional) add extra config to incus containers
 incus_instances = {
   "media" = {
-    ip     = "10.150.19.50"
-    cpu    = 2
-    memory = "2GiB"
+    ip      = "10.150.19.50"
+    cpu     = 2
+    memory  = "2GiB"
     nesting = true
 
-    # optional
     bind_mounts = [
       {
         host_path  = "/mnt/media"
@@ -261,73 +413,120 @@ incus_instances = {
   }
 
   "db" = {
-    ip           = "10.150.19.51"
-    cpu          = 1
-    memory       = "1GiB"
+    ip     = "10.150.19.51"
+    cpu    = 1
+    memory = "1GiB"
+
     extra_config = {
       "boot.autostart.priority" = "100"
     }
   }
+
+  # DHCP without a static reservation.
+  "worker" = {
+    ip     = null
+    cpu    = 1
+    memory = "1GiB"
+  }
 }
 
-incus_image          = "debian/12/cloud"
-incus_network        = "incusbr0"
-incus_storage_pool   = "default"
-ssh_public_key       = "ssh-ed25519 AAAAC3... user@host"
-username             = "incus"
-timezone             = "Asia/Kuala_Lumpur"
+# Incus configuration.
+incus_image        = "debian/12/cloud"
+incus_network      = "incusbr0"
+incus_storage_pool = "default"
+incus_nic_type     = "bridged"
+
+# Networking configuration.
+incus_dhcp_enabled = true
+incus_gateway      = null
+incus_dns_servers  = ["1.1.1.1", "8.8.8.8"]
+
+# User configuration.
+ssh_public_key = "ssh-ed25519 AAAAC3... user@host"
+username       = "incus"
+timezone       = "Asia/Kuala_Lumpur"
 ```
+
+### Running Docker Inside an Incus Container
 
 > [!NOTE]
 >
-> The `memory` field in `incus_instances` **only accepts values in `MiB` or `GiB`** (e.g. `512MiB`,
-> `2GiB`). Other units like `MB`, `GB`, or `KiB` are not allowed by this module.
+> If we want to run Docker containers inside an Incus container, enable nesting with
+> `nesting = true`.
+>
+> We may also need to configure Docker to use the `fuse-overlayfs` storage driver. This setup has
+> not yet been tested with `btrfs` or `zfs`.
+
+Inside the container, create or edit `/etc/docker/daemon.json` after installing Docker:
+
+```shell
+sudo vi /etc/docker/daemon.json
+```
+
+Insert the following JSON:
+
+```json
+{
+  "storage-driver": "fuse-overlayfs"
+}
+```
+
+Then restart Docker:
+
+```shell
+sudo systemctl restart docker
+```
+
+This can help avoid the `invalid argument` error with the default overlayfs storage driver on an
+already-nested filesystem.
 
 <!-- USAGE -->
 
 ## Usage
 
-- Clone the project
+- Clone the project.
 
-  Copy the [terraform.tfvars.example](terraform.tfvars.example) variables into `terraform.tfvars`
-  and update our SSH key and desired containers.
+  Copy the [terraform.tfvars.example](terraform.tfvars.example) variables into `terraform.tfvars`,
+  then update our SSH key and desired containers.
 
   ```shell
   cd tofucus
   cp terraform.tfvars.example terraform.tfvars
   ```
 
-- Initialize opentofu
+- Initialize OpenTofu.
 
   ```shell
   tofu init
   ```
 
-- Review the plan
+- Review the plan.
 
   ```shell
   tofu plan
   ```
 
-- Apply the configuration
+- Apply the configuration.
 
   ```shell
   tofu apply -auto-approve
-  # or
+  ```
+
+  Or provide our SSH public key directly:
+
+  ```shell
   tofu apply -var="ssh_public_key=$(cat ~/.ssh/id_ed25519.pub)" -auto-approve
   ```
 
-  After creation, opentofu outputs the container names and ip addresses.
+- Wait for cloud-init to finish (approximately 30 seconds).
 
-- Wait for cloud‑init to finish (approx. 30 seconds)
-
-- SSH into a container
+- SSH into a container.
 
   ```shell
   ssh incus@10.150.19.50
   ```
 
-- Destroy everything
+- Destroy everything.
 
   ```shell
   tofu destroy -auto-approve
@@ -335,34 +534,53 @@ timezone             = "Asia/Kuala_Lumpur"
 
 ### Adding or Removing Containers
 
-- To add new container, simply append a new entry to the `incus_instances` map in
-  `terraform.tfvars`.
-- To remove a container, comment out or delete its entry.
+To add a container, append a new entry to the `incus_instances` map in `terraform.tfvars`.
+
+To remove a container, delete its entry from the map.
 
 ```hcl
 incus_instances = {
-  "web" = { ip = "10.150.19.50", cpu = 2, memory = "2GiB" },
-  # "db"  = { ip = "10.150.19.51", cpu = 1, memory = "1GiB" }   # removed
-  "cache" = { ip = "10.150.19.52", cpu = 1, memory = "1GiB" }   # added
+  "web" = {
+    ip     = "10.150.19.50"
+    cpu    = 2
+    memory = "2GiB"
+  }
+
+  # Removed container:
+  # "db" = {
+  #   ip     = "10.150.19.51"
+  #   cpu    = 1
+  #   memory = "1GiB"
+  # }
+
+  # Added container:
+  "cache" = {
+    ip     = "10.150.19.52"
+    cpu    = 1
+    memory = "1GiB"
+  }
 }
 ```
 
-Attaching shared directory to containers
+### Attaching Shared Directories to Containers
 
-**Common Use Case:**
+Common use cases:
 
-- Share media between containers (e.g. Jellyfin, Sonarr):
-  - Mount the same host directory (e.g. `/mnt/media`) into multiple containers
-- Persist important data:
-  - Store configs and repositories on the host using bind mounts
+- Share media between containers (e.g. Jellyfin and Sonarr).
+  - Mount the same host directory (e.g. `/mnt/media`) into multiple containers.
+- Persist important data.
+  - Store configurations and repositories on the host using bind mounts.
+
+Example:
 
 ```hcl
 incus_instances = {
   "jellyfin" = {
-    ip     = "10.150.19.50"
-    cpu    = 2
-    memory = "2GiB"
+    ip      = "10.150.19.50"
+    cpu     = 2
+    memory  = "2GiB"
     nesting = true
+
     bind_mounts = [
       {
         host_path  = "/mnt/media"
@@ -370,16 +588,18 @@ incus_instances = {
         shift      = true
       }
     ]
+
     extra_config = {
       "boot.autostart.priority" = "100"
     }
   }
 
   "sonarr" = {
-    ip     = "10.150.19.51"
-    cpu    = 1
-    memory = "1GiB"
+    ip      = "10.150.19.51"
+    cpu     = 1
+    memory  = "1GiB"
     nesting = true
+
     bind_mounts = [
       {
         host_path  = "/mnt/media"
@@ -391,14 +611,15 @@ incus_instances = {
 }
 ```
 
-Then run `tofu plan` to review the changes, then followed by `tofu apply`.
+Then run `tofu plan` to review the changes, followed by `tofu apply`.
 
 > [!NOTE]
 >
-> Removing a container, will destroy its filesystem – any data inside the container will be lost.
+> Removing a container will destroy its filesystem. Any data stored inside the container will be
+> lost.
 >
-> Bind mount directories remain on the host system. OpenTofu/Incus will not destroy bind directory
-> when we destroy the containers
+> Bind mount directories remain on the host system. OpenTofu/Incus will not destroy the host
+> directories when the containers are destroyed.
 
 <!-- QUICK START -->
 
@@ -416,23 +637,39 @@ tofu apply -var="ssh_public_key=$(cat ~/.ssh/id_ed25519.pub)" -auto-approve
 
 ### Outputs
 
-Example output after apply:
+Example output after applying the configuration:
 
-```shell
+```hcl
 containers = {
   "web" = {
-    "ip" = "10.150.19.50"
+    "ip"   = "10.150.19.50"
     "name" = "web"
   }
+
   "db" = {
-    "ip" = "10.150.19.51"
+    "ip"   = "10.150.19.51"
     "name" = "db"
   }
+
+  "worker" = {
+    "ip"   = null
+    "name" = "worker"
+  }
 }
+
 reminder = "Container is up! Please wait ~30 seconds for the setup script to finish before SSHing."
 ```
 
-SSH into container:
+**Note:** The output shows the IP address configured in `terraform.tfvars`. When `ip = null`, the
+output will also be `null`, even if the container receives an IP address from DHCP.
+
+To see the actual IP address assigned to a container, use:
+
+```shell
+incus list
+```
+
+SSH into a container using its actual IP address:
 
 ```shell
 ssh incus@10.150.19.50
@@ -442,81 +679,131 @@ ssh incus@10.150.19.50
 
 ## How It Works
 
-- The root [main.tf](main.tf) calls the instances module once per entry in `var.incus_instances`.
+- The root [main.tf](main.tf) calls the instances module once for each entry in
+  `var.incus_instances`.
 - The module `modules/instances/main.tf`:
-  - Creates an `incus_instance` resource with the specified **name, image, CPU, memory**.
-  - Attaches a root disk device (storage pool) and an **eth0** network device (bridged with static
-    IP).
-  - Apply a cloud‑init user‑data template (cloud-init.yaml.tftpl).
+  - Creates an `incus_instance` resource with the specified **name, image, CPU, and memory**.
+  - Attaches a root disk device using the selected storage pool.
+  - Attaches an `eth0` network device to the selected network.
+  - Applies cloud-init user-data and network configuration templates.
+
+- Network configuration:
+  - Uses DHCP when `incus_dhcp_enabled = true`.
+  - Uses static IP configuration when `incus_dhcp_enabled = false`.
+  - Adds an Incus DHCP reservation when using a managed bridge with DHCP and a static IP is
+    provided.
+  - Leaves IP assignment to the external DHCP server when using an unmanaged bridge with DHCP and
+    `ip = null`.
 
 - **Optionally** attaches additional disk devices for bind mounts:
-  - Maps host directories into the container filesystem
-  - Useful for sharing media, repositories, or configs
+  - Maps host directories into the container filesystem.
+  - Useful for sharing media, repositories, or configurations.
 
-- **Optionally** add extra configurations from
-  [instance options](https://linuxcontainers.org/incus/docs/main/reference/instance_options)
-  - Useful when default configs use by this module is not enough
+- **Optionally** adds extra configurations from
+  [Incus instance options](https://linuxcontainers.org/incus/docs/main/reference/instance_options/).
+  - Useful when the default configurations used by this module are not enough.
 
-- **Optionally** enable nesting capabilities for incus containers.
-  - Useful when we want to use docker or another incus inside container
+- **Optionally** enables nesting capabilities for Incus containers.
+  - Useful when running Docker or another Incus instance inside a container.
 
-- Cloud‑init on the container:
+- Cloud-init on the container:
   - Creates the user and adds the SSH key.
-  - Writes a helper script (/usr/local/bin/setup-lab.sh) that detects the distribution and installs
-    packages using apt, dnf, or pacman.
-  - Runs the script via `runcmd`.
+  - Writes a helper script (`/usr/local/bin/setup-lab.sh`) that detects the distribution and
+    installs packages using `apt`, `dnf`, or `pacman`.
+  - Runs the script using `runcmd`.
 
-- The module output shows container names and their assigned IP addresses.
+- The module output shows container names and their configured IP addresses.
 
 <!-- TROUBLESHOOT -->
 
 ## Troubleshooting
 
-### Container created but cannot SSH
+### Container Created but Cannot SSH
 
-- Wait ~30 seconds (cloud-init may still be running)
+- Wait approximately 30 seconds. Cloud-init may still be running.
 - Check cloud-init status:
 
   ```shell
   incus exec <container> -- cloud-init status
   ```
 
-- SSH service not running
+- Check whether the SSH service is running:
 
   ```shell
   incus exec <container> -- systemctl status ssh
-  # or
+  ```
+
+  Or:
+
+  ```shell
   incus exec <container> -- systemctl status sshd
   ```
 
-- Check setup logs
+- Check the setup logs:
 
   ```shell
   incus exec <container> -- cat /var/log/lab-setup.log
   ```
 
-- Bind mount permission denied (can't write)
-  - Verify `shift = true` is set in `terraform.tfvars` for the bind mount.
-  - Ensure the host kernel is at least **Linux 5.12** (idmapped mounts). Check with `uname -r`.
-  - Alternatively, adjust host directory permissions (e.g. `chmod 755`) or run the container as
-    privileged (`security.privileged = true` – not recommended for production).
+- Check the container's IP address:
+
+  ```shell
+  incus list
+  ```
+
+### Container Does Not Get an IP Address
+
+- Check that the container is connected to the correct network:
+
+  ```shell
+  incus config show <container> --expanded
+  ```
+
+- If using an Incus-managed bridge, check the network configuration:
+
+  ```shell
+  incus network show incusbr0
+  ```
+
+- If using an unmanaged Linux bridge such as `br0`, make sure the external DHCP server (usually our
+  router) is working and has available addresses.
+- If using static IP configuration:
+  - Make sure `incus_dhcp_enabled = false`.
+  - Make sure every container has a valid static IP address.
+  - Make sure `incus_gateway` is configured.
+  - Check that the IP address, gateway, and DNS settings are correct.
+
+### Bind Mount Permission Denied
+
+- Verify that `shift = true` is set for the bind mount if needed.
+- Ensure the host kernel is at least **Linux 5.12** for idmapped mounts. Check with:
+
+  ```shell
+  uname -r
+  ```
+
+- Alternatively, adjust host directory permissions (e.g. `chmod 755`).
+- Running a container as privileged (`security.privileged = true`) may be another option, but it is
+  not recommended for production.
 
 <!-- TODO -->
 
 ## TODO
 
+- [x] DHCP support
 - [x] Static IP assignment
-- [x] Cross‑distribution cloud‑init script
+- [x] Support Incus-managed and unmanaged bridges
+- [x] Cross-distribution cloud-init script
 - [x] CPU and memory limits
 - [x] Outputs
-- [ ] Use incus profile/project in `modules/instances/main.tf`
+- [ ] Use Incus profiles/projects in `modules/instances/main.tf`
 - [x] Bind mounts (host directories)
 - [ ] Managed storage volumes (zfs/btrfs/dir)
 - [ ] Multiple networks
 - [x] Support nested virtualization
-- [x] Support for adding extra configs options from
-      [Instance options](https://linuxcontainers.org/incus/docs/main/reference/instance_options/)
-- [ ] Support for adding extra storage pool
+- [x] Support adding extra configuration options from
+      [Incus instance options](https://linuxcontainers.org/incus/docs/main/reference/instance_options/)
+- [ ] Support adding extra storage pools
 
 <!-- LICENSE -->
 
