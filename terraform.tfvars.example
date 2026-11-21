@@ -1,4 +1,3 @@
-```hcl
 # ============================================================
 # Container configuration
 # ============================================================
@@ -208,4 +207,3 @@ incus_remote_name = "local"
 # Required when connecting to a remote server that requires
 # certificate trust. Keep this value secret.
 incus_remote_token = ""
-```
