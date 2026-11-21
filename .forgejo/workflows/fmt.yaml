@@ -27,7 +27,7 @@ jobs:
           cache: true
 
       - name: OpenTofu format
-        run: tofu fmt -check
+        run: tofu fmt -diff -check
 
       - name: OpenTofu init
         run: tofu init
