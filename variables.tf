@@ -10,7 +10,7 @@ variable "incus_instances" {
     cpu     = number
     memory  = string
     nesting = optional(bool, false)
-    bind_mounts  = optional(list(object({
+    bind_mounts = optional(list(object({
       host_path  = string
       mount_path = string
       readonly   = optional(bool, false)
@@ -64,7 +64,7 @@ variable "incus_instances" {
     condition = length(distinct([
       for inst in var.incus_instances : inst.ip
       if inst.ip != null
-    ])) == length([
+      ])) == length([
       for inst in var.incus_instances : inst.ip
       if inst.ip != null
     ])
