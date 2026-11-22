@@ -19,22 +19,22 @@ locals {
       timezone = var.timezone
       // if 'var.nesting' is 'true', the cloud-init will install 'fuse-overlayfs'
       // useful for docker inside incus. (not yet try if using btrfs or zfs require it or not)
-      nesting  = var.nesting
+      nesting = var.nesting
     })
     "cloud-init.network-config" = templatefile("${path.module}/template/network-config.yaml.tftpl", {
-      dhcp_enabled = var.dhcp_enabled
-      ipv4_address = var.ipv4_address
-      ipv4_gateway = var.ipv4_gateway
+      dhcp_enabled    = var.dhcp_enabled
+      ipv4_address    = var.ipv4_address
+      ipv4_gateway    = var.ipv4_gateway
       dns_nameservers = var.dns_nameservers
     })
   }
 }
 
 resource "incus_instance" "vm" {
-  name      = var.instance_name
-  image     = "images:${var.image}"
-  type      = "container"
-  running   = true
+  name    = var.instance_name
+  image   = "images:${var.image}"
+  type    = "container"
+  running = true
 
   // merge configs (order)
   config = merge(
@@ -73,8 +73,8 @@ resource "incus_instance" "vm" {
       name = "bind-${substr(md5(device.value.host_path), 0, 8)}"
       type = "disk"
       properties = {
-        source   = device.value.host_path
-        path     = device.value.mount_path
+        source = device.value.host_path
+        path   = device.value.mount_path
         // use ternary to set boolean value into ("string")
         // condition ? true_value : false_value
         readonly = device.value.readonly ? "true" : "false"
